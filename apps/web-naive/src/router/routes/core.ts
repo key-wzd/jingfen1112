@@ -35,8 +35,25 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'Root',
     path: '/',
-    redirect: preferences.app.defaultHomePath,
-    children: [],
+    redirect: '/',
+    children: [
+      {
+        name: 'Home',
+        path: '',
+        component: () => import('#/views/home/index.vue'),
+        meta: {
+          title: '首页',
+        },
+      },
+      {
+        name: 'Compare',
+        path: 'compare',
+        component: () => import('#/views/compare/index.vue'),
+        meta: {
+          title: '产品对比',
+        },
+      },
+    ],
   },
   {
     component: AuthPageLayout,
