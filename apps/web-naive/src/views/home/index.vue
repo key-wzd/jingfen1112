@@ -9,6 +9,7 @@
         <nav class="nav-links">
           <a href="/" class="active">首页</a>
           <a href="/compare">产品对比</a>
+          <a href="/power-consumption">功耗对比</a>
         </nav>
       </div>
     </header>

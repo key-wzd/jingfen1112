@@ -1,7 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
-import { preferences } from '@vben/preferences';
 
 import { $t } from '#/locales';
 
@@ -35,7 +34,7 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'Root',
     path: '/',
-    redirect: '/',
+    redirect: '',
     children: [
       {
         name: 'Home',
@@ -51,6 +50,14 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () => import('#/views/compare/index.vue'),
         meta: {
           title: '产品对比',
+        },
+      },
+      {
+        name: 'PowerConsumption',
+        path: 'power-consumption',
+        component: () => import('#/views/power-consumption/index.vue'),
+        meta: {
+          title: '功耗对比',
         },
       },
     ],

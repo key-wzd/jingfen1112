@@ -9,6 +9,7 @@
         <nav class="nav-links">
           <a href="/">首页</a>
           <a href="/compare" class="active">产品对比</a>
+          <a href="/power-consumption">功耗对比</a>
         </nav>
       </div>
     </header>
@@ -172,7 +173,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
+import { useProductStore } from '#/store/product';
 
 // 品牌列表
 const brands = ['Apple', 'Samsung', 'Xiaomi', 'Huawei', 'OPPO', 'vivo'];
@@ -323,12 +325,34 @@ const productData = {
   }
 };
 
+// 初始化产品store
+const productStore = useProductStore();
+
 // 产品列表
 const products = ref([
   { brand: 'Apple', model: 'iPhone 15' },
   { brand: 'Samsung', model: 'Galaxy S24' },
   { brand: '', model: '' }
 ]);
+
+// 监听产品变化，同步到store
+watch(
+  products,
+  (newProducts) => {
+    // 过滤出有效的产品（有品牌和型号）
+    const validProducts = newProducts
+      .filter(product => product && product.brand && product.model)
+      .map((product, index) => ({
+        id: productStore.getProductId(product.brand, product.model),
+        brand: product.brand,
+        model: product.model
+      }));
+    
+    // 更新store中的选择产品
+    productStore.setSelectedProducts(validProducts);
+  },
+  { deep: true, immediate: true }
+);
 
 // 计算属性：是否有选择的产品（至少两个）
 const hasSelectedProducts = computed(() => {
@@ -625,7 +649,7 @@ const removeProduct = (index: number) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: #000;
 }
 
 .image-placeholder {
@@ -661,12 +685,12 @@ const removeProduct = (index: number) => {
 }
 
 .spec-label {
-  color: #666;
+  color: #000;
   font-size: 0.9rem;
 }
 
 .spec-value {
-  color: #333;
+  color: #000;
   font-weight: 500;
 }
 

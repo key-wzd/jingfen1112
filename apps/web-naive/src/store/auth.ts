@@ -54,11 +54,20 @@ export const useAuthStore = defineStore('auth', () => {
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
         } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(
-                userInfo.homePath || preferences.app.defaultHomePath,
+          if (onSuccess) {
+            await onSuccess?.();
+          } else {
+            // 检查URL中的redirect参数
+            const currentRoute = router.currentRoute.value;
+            const redirectPath = currentRoute.query.redirect as string;
+            if (redirectPath) {
+              await router.push(decodeURIComponent(redirectPath));
+            } else {
+              await router.push(
+                userInfo.homePath || preferences.app.defaultHomePath || '/'
               );
+            }
+          }
         }
 
         if (userInfo?.realName) {

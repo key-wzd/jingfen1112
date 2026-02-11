@@ -50,8 +50,8 @@ function setupAccessGuard(router: Router) {
     const userStore = useUserStore();
     const authStore = useAuthStore();
 
-    // 基本路由，这些路由不需要进入权限拦截
-    if (coreRouteNames.includes(to.name as string) || to.path === '/' || to.path === '/compare') {
+    // 登录相关路由，不需要进入权限拦截
+    if (to.path === LOGIN_PATH || to.name === 'Authentication') {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
         return decodeURIComponent(
           (to.query?.redirect as string) ||
@@ -59,6 +59,11 @@ function setupAccessGuard(router: Router) {
             preferences.app.defaultHomePath,
         );
       }
+      return true;
+    }
+
+    // 检查是否是认证相关的子路由
+    if (to.matched.some(record => record.name === 'Authentication')) {
       return true;
     }
 
