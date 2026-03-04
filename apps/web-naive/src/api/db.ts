@@ -1,4 +1,5 @@
-const DB_SERVER_URL = 'http://localhost:3001';
+// 使用当前页面的主机地址来构建数据库服务器 URL
+const DB_SERVER_URL = `${window.location.protocol}//${window.location.hostname}:3001`;
 
 export interface Phone {
   id: number;

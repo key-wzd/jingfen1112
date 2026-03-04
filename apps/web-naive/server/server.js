@@ -5,9 +5,16 @@ import multer from 'multer';
 import xlsx from 'xlsx';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 确保 uploads 目录存在
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 const app = express();
 const PORT = 3001;
@@ -109,7 +116,7 @@ app.post('/api/phones', async (req, res) => {
        game_power = VALUES(game_power),
        standby_power = VALUES(standby_power),
        browser_power = VALUES(browser_power)`,
-      [phone.brand, phone.model, phone.screen, phone.processor, phone.ram, phone.storage, phone.camera, phone.battery, phone.price, phone.battery_capacity, phone.video_power || 0, phone.game_power || 0, phone.standby_power || 0, phone.browser_power || 0]
+      [phone.brand, phone.model, phone.screen, phone.processor, phone.ram, phone.storage, phone.camera, phone.battery, phone.price, phone.battery_capacity || '', phone.video_power || 0, phone.game_power || 0, phone.standby_power || 0, phone.browser_power || 0]
     );
     res.json({ success: true, message: '添加成功', insertId: result.insertId });
   } catch (error) {
@@ -286,8 +293,8 @@ app.get('/api/models/:brand', async (req, res) => {
 async function startServer() {
   try {
     await initDatabase();
-    app.listen(PORT, () => {
-      console.log(`数据库服务已启动: http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`数据库服务已启动: http://0.0.0.0:${PORT}`);
       console.log('数据库配置:', dbConfig);
     });
   } catch (error) {
