@@ -1,11 +1,10 @@
 import { faker } from '@faker-js/faker';
 import { eventHandler, getQuery } from 'h3';
-import { verifyAccessToken } from '~/utils/jwt-utils';
 import {
   sleep,
-  unAuthorizedResponse,
   usePageResponseSuccess,
 } from '~/utils/response';
+import { withAuth } from '~/utils/auth-utils';
 
 function generateMockDataList(count: number) {
   const dataList = [];
@@ -40,12 +39,7 @@ function generateMockDataList(count: number) {
 
 const mockData = generateMockDataList(100);
 
-export default eventHandler(async (event) => {
-  const userinfo = verifyAccessToken(event);
-  if (!userinfo) {
-    return unAuthorizedResponse(event);
-  }
-
+export default withAuth(eventHandler(async (event) => {
   await sleep(600);
 
   const { page, pageSize, sortBy, sortOrder } = getQuery(event);
@@ -114,4 +108,5 @@ export default eventHandler(async (event) => {
     String(pageSizeNumber),
     listData,
   );
-});
+}));
+

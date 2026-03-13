@@ -16,6 +16,15 @@ export interface UserPayload extends UserInfo {
   exp: number;
 }
 
+function findUserByUsername(username: string): Omit<UserInfo, 'password'> | null {
+  const user = MOCK_USERS.find((item) => item.username === username);
+  if (!user) {
+    return null;
+  }
+  const { password: _pwd, ...userinfo } = user;
+  return userinfo;
+}
+
 export function generateAccessToken(user: UserInfo) {
   return jwt.sign(user, ACCESS_TOKEN_SECRET, { expiresIn: '7d' });
 }
@@ -45,13 +54,7 @@ export function verifyAccessToken(
       ACCESS_TOKEN_SECRET,
     ) as unknown as UserPayload;
 
-    const username = decoded.username;
-    const user = MOCK_USERS.find((item) => item.username === username);
-    if (!user) {
-      return null;
-    }
-    const { password: _pwd, ...userinfo } = user;
-    return userinfo;
+    return findUserByUsername(decoded.username);
   } catch {
     return null;
   }
@@ -62,15 +65,7 @@ export function verifyRefreshToken(
 ): null | Omit<UserInfo, 'password'> {
   try {
     const decoded = jwt.verify(token, REFRESH_TOKEN_SECRET) as UserPayload;
-    const username = decoded.username;
-    const user = MOCK_USERS.find(
-      (item) => item.username === username,
-    ) as UserInfo;
-    if (!user) {
-      return null;
-    }
-    const { password: _pwd, ...userinfo } = user;
-    return userinfo;
+    return findUserByUsername(decoded.username);
   } catch {
     return null;
   }

@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
 import { eventHandler } from 'h3';
-import { verifyAccessToken } from '~/utils/jwt-utils';
-import { unAuthorizedResponse, useResponseSuccess } from '~/utils/response';
+import { useResponseSuccess } from '~/utils/response';
+import { withAuth } from '~/utils/auth-utils';
 
 const formatterCN = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
@@ -50,13 +50,9 @@ function generateMockDataList(count: number) {
 
 const mockData = generateMockDataList(10);
 
-export default eventHandler(async (event) => {
-  const userinfo = verifyAccessToken(event);
-  if (!userinfo) {
-    return unAuthorizedResponse(event);
-  }
-
+export default withAuth(eventHandler(async (event) => {
   const listData = structuredClone(mockData);
 
   return useResponseSuccess(listData);
-});
+}));
+
