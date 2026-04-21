@@ -7,8 +7,11 @@
         </div>
         <nav class="nav-links">
           <a href="/">首页</a>
-          <a href="/compare" class="active">产品对比</a>
-          <a href="/power-consumption">功耗对比</a>
+          <a href="/power-consumption">旗舰手机功耗</a>
+          <a href="/mid-low-phone-power">中低端手机功耗</a>
+          <a href="/mouse-power">鼠标功耗</a>
+          <a href="/keyboard-power">键盘功耗</a>
+          <a href="/remote-control-power">遥控器功耗</a>
           <a href="/config">数据管理</a>
         </nav>
       </div>
@@ -152,8 +155,11 @@
             <h4>快速链接</h4>
             <ul>
               <li><a href="/">首页</a></li>
-              <li><a href="/compare">产品对比</a></li>
-              <li><a href="/power-consumption">功耗对比</a></li>
+              <li><a href="/power-consumption">旗舰手机功耗</a></li>
+              <li><a href="/mid-low-phone-power">中低端手机功耗</a></li>
+              <li><a href="/mouse-power">鼠标功耗</a></li>
+              <li><a href="/keyboard-power">键盘功耗</a></li>
+              <li><a href="/remote-control-power">遥控器功耗</a></li>
               <li><a href="/config">数据管理</a></li>
             </ul>
           </div>
@@ -167,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { dbApi, type Phone } from '#/api/db';
 
 const brands = ref<string[]>([]);
@@ -219,13 +225,8 @@ const getModelsByBrand = (brand: string) => {
 const getProductSpecs = (brand: string, model: string) => {
   if (!brand || !model) {
     return {
-      screen: '-',
-      processor: '-',
-      ram: '-',
-      storage: '-',
-      camera: '-',
-      battery: '-',
-      price: '-'
+      screen: '-', processor: '-', ram: '-', storage: '-',
+      camera: '-', battery: '-', price: '-'
     };
   }
   const key = `${brand} ${model}`;
@@ -242,13 +243,8 @@ const getProductSpecs = (brand: string, model: string) => {
     };
   }
   return {
-    screen: '-',
-    processor: '-',
-    ram: '-',
-    storage: '-',
-    camera: '-',
-    battery: '-',
-    price: '-'
+    screen: '-', processor: '-', ram: '-', storage: '-',
+    camera: '-', battery: '-', price: '-'
   };
 };
 
@@ -320,15 +316,17 @@ onMounted(() => {
 
 .nav-links {
   display: flex;
-  gap: 30px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
   text-decoration: none;
   color: #666;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: color 0.3s;
+  white-space: nowrap;
 }
 
 .nav-links a:hover,

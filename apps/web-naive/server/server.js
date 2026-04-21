@@ -10,7 +10,6 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 确保 uploads 目录存在
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -34,6 +33,83 @@ const dbConfig = {
 
 const pool = mysql.createPool(dbConfig);
 
+const CATEGORY_CONFIG = {
+  phones: {
+    table: 'phones',
+    name: '旗舰手机',
+    fields: ['brand', 'model', 'screen', 'processor', 'ram', 'storage', 'camera', 'battery', 'price', 'battery_capacity', 'video_power', 'game_power', 'standby_power', 'browser_power'],
+    cnFields: ['品牌', '型号', '屏幕', '处理器', '内存', '存储', '摄像头', '电池', '价格', '电池容量', '视频播放功耗', '游戏功耗', '待机功耗', '浏览网页功耗'],
+    chartConfig: [
+      { scenario: '使用', chartType: 'bar', fields: ['video_power', 'game_power', 'browser_power'], labels: ['视频播放功耗', '游戏功耗', '浏览网页功耗'] },
+      { scenario: '未使用', chartType: 'line', fields: ['standby_power'], labels: ['待机功耗'] },
+    ],
+    displayColumns: [
+      { key: 'brand', label: '品牌' },
+      { key: 'model', label: '型号' },
+      { key: 'battery_capacity', label: '电池容量', suffix: 'mAh' },
+      { key: 'processor', label: '处理器' },
+    ],
+  },
+  mid_low_phones: {
+    table: 'mid_low_phones',
+    name: '中低端手机',
+    fields: ['brand', 'model', 'screen', 'processor', 'ram', 'storage', 'camera', 'battery', 'price', 'battery_capacity', 'video_power', 'game_power', 'standby_power', 'browser_power'],
+    cnFields: ['品牌', '型号', '屏幕', '处理器', '内存', '存储', '摄像头', '电池', '价格', '电池容量', '视频播放功耗', '游戏功耗', '待机功耗', '浏览网页功耗'],
+    chartConfig: [
+      { scenario: '使用', chartType: 'bar', fields: ['video_power', 'game_power', 'browser_power'], labels: ['视频播放功耗', '游戏功耗', '浏览网页功耗'] },
+      { scenario: '未使用', chartType: 'line', fields: ['standby_power'], labels: ['待机功耗'] },
+    ],
+    displayColumns: [
+      { key: 'brand', label: '品牌' },
+      { key: 'model', label: '型号' },
+      { key: 'battery_capacity', label: '电池容量', suffix: 'mAh' },
+      { key: 'processor', label: '处理器' },
+    ],
+  },
+  mice: {
+    table: 'mice',
+    name: '鼠标',
+    fields: ['brand', 'model', 'sleep_power', 'dormancy_power', 'usage_power'],
+    cnFields: ['品牌', '型号', '睡眠功耗', '休眠功耗', '使用功耗'],
+    chartConfig: [
+      { scenario: '使用', chartType: 'bar', fields: ['dormancy_power', 'sleep_power'], labels: ['休眠功耗', '睡眠功耗'] },
+      { scenario: '未使用', chartType: 'line', fields: ['usage_power'], labels: ['使用功耗'] },
+    ],
+    displayColumns: [
+      { key: 'brand', label: '品牌' },
+      { key: 'model', label: '型号' },
+    ],
+  },
+  keyboards: {
+    table: 'keyboards',
+    name: '键盘',
+    fields: ['brand', 'model', 'sleep_power', 'dormancy_power', 'usage_power'],
+    cnFields: ['品牌', '型号', '睡眠功耗', '休眠功耗', '使用功耗'],
+    chartConfig: [
+      { scenario: '使用', chartType: 'bar', fields: ['dormancy_power', 'sleep_power'], labels: ['休眠功耗', '睡眠功耗'] },
+      { scenario: '未使用', chartType: 'line', fields: ['usage_power'], labels: ['使用功耗'] },
+    ],
+    displayColumns: [
+      { key: 'brand', label: '品牌' },
+      { key: 'model', label: '型号' },
+    ],
+  },
+  remote_controls: {
+    table: 'remote_controls',
+    name: '遥控器',
+    fields: ['brand', 'model', 'sleep_power', 'dormancy_power', 'usage_power'],
+    cnFields: ['品牌', '型号', '睡眠功耗', '休眠功耗', '使用功耗'],
+    chartConfig: [
+      { scenario: '使用', chartType: 'bar', fields: ['dormancy_power', 'sleep_power'], labels: ['休眠功耗', '睡眠功耗'] },
+      { scenario: '未使用', chartType: 'line', fields: ['usage_power'], labels: ['使用功耗'] },
+    ],
+    displayColumns: [
+      { key: 'brand', label: '品牌' },
+      { key: 'model', label: '型号' },
+    ],
+  },
+};
+
 async function initDatabase() {
   const connection = await mysql.createConnection({
     host: dbConfig.host,
@@ -46,7 +122,7 @@ async function initDatabase() {
   await connection.end();
 
   const conn = await pool.getConnection();
-  
+
   await conn.query(`
     CREATE TABLE IF NOT EXISTS phones (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -67,12 +143,287 @@ async function initDatabase() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY unique_brand_model (brand, model)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='手机参数表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旗舰手机参数表'
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS mid_low_phones (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      brand VARCHAR(100) NOT NULL COMMENT '品牌',
+      model VARCHAR(100) NOT NULL COMMENT '型号',
+      screen VARCHAR(200) COMMENT '屏幕',
+      processor VARCHAR(200) COMMENT '处理器',
+      ram VARCHAR(100) COMMENT '内存',
+      storage VARCHAR(100) COMMENT '存储',
+      camera VARCHAR(500) COMMENT '摄像头',
+      battery VARCHAR(100) COMMENT '电池',
+      price VARCHAR(100) COMMENT '价格',
+      battery_capacity VARCHAR(50) COMMENT '电池容量(mAh)',
+      video_power INT DEFAULT 0 COMMENT '视频播放功耗(mW)',
+      game_power INT DEFAULT 0 COMMENT '游戏功耗(mW)',
+      standby_power INT DEFAULT 0 COMMENT '待机功耗(mW)',
+      browser_power INT DEFAULT 0 COMMENT '浏览网页功耗(mW)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_brand_model (brand, model)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='中低端手机参数表'
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS mice (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      brand VARCHAR(100) NOT NULL COMMENT '品牌',
+      model VARCHAR(100) NOT NULL COMMENT '型号',
+      sleep_power INT DEFAULT 0 COMMENT '睡眠功耗(mW)',
+      dormancy_power INT DEFAULT 0 COMMENT '休眠功耗(mW)',
+      usage_power INT DEFAULT 0 COMMENT '使用功耗(mW)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_brand_model (brand, model)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='鼠标参数表'
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS keyboards (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      brand VARCHAR(100) NOT NULL COMMENT '品牌',
+      model VARCHAR(100) NOT NULL COMMENT '型号',
+      sleep_power INT DEFAULT 0 COMMENT '睡眠功耗(mW)',
+      dormancy_power INT DEFAULT 0 COMMENT '休眠功耗(mW)',
+      usage_power INT DEFAULT 0 COMMENT '使用功耗(mW)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_brand_model (brand, model)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='键盘参数表'
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS remote_controls (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      brand VARCHAR(100) NOT NULL COMMENT '品牌',
+      model VARCHAR(100) NOT NULL COMMENT '型号',
+      sleep_power INT DEFAULT 0 COMMENT '睡眠功耗(mW)',
+      dormancy_power INT DEFAULT 0 COMMENT '休眠功耗(mW)',
+      usage_power INT DEFAULT 0 COMMENT '使用功耗(mW)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_brand_model (brand, model)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='遥控器参数表'
   `);
 
   conn.release();
   console.log('数据库初始化完成');
 }
+
+app.get('/api/categories', (req, res) => {
+  const categories = Object.entries(CATEGORY_CONFIG).map(([key, config]) => ({
+    key,
+    name: config.name,
+    table: config.table,
+    chartConfig: config.chartConfig,
+    displayColumns: config.displayColumns,
+    fields: config.fields,
+    cnFields: config.cnFields,
+  }));
+  res.json({ success: true, data: categories });
+});
+
+app.get('/api/categories/:category/chart-config', (req, res) => {
+  const config = CATEGORY_CONFIG[req.params.category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  res.json({ success: true, data: config.chartConfig });
+});
+
+function getPhoneFields(category) {
+  if (category === 'phones' || category === 'mid_low_phones') {
+    return {
+      insert: 'brand, model, screen, processor, ram, storage, camera, battery, price, battery_capacity, video_power, game_power, standby_power, browser_power',
+      update: 'screen = VALUES(screen), processor = VALUES(processor), ram = VALUES(ram), storage = VALUES(storage), camera = VALUES(camera), battery = VALUES(battery), price = VALUES(price), battery_capacity = VALUES(battery_capacity), video_power = VALUES(video_power), game_power = VALUES(game_power), standby_power = VALUES(standby_power), browser_power = VALUES(browser_power)',
+      placeholders: '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?',
+      updateSet: 'brand = ?, model = ?, screen = ?, processor = ?, ram = ?, storage = ?, camera = ?, battery = ?, price = ?, battery_capacity = ?, video_power = ?, game_power = ?, standby_power = ?, browser_power = ?',
+    };
+  }
+  return {
+    insert: 'brand, model, sleep_power, dormancy_power, usage_power',
+    update: 'sleep_power = VALUES(sleep_power), dormancy_power = VALUES(dormancy_power), usage_power = VALUES(usage_power)',
+    placeholders: '?, ?, ?, ?, ?',
+    updateSet: 'brand = ?, model = ?, sleep_power = ?, dormancy_power = ?, usage_power = ?',
+  };
+}
+
+function getBodyValues(category, body) {
+  if (category === 'phones' || category === 'mid_low_phones') {
+    return [body.brand, body.model, body.screen, body.processor, body.ram, body.storage, body.camera, body.battery, body.price, body.battery_capacity || '', body.video_power || 0, body.game_power || 0, body.standby_power || 0, body.browser_power || 0];
+  }
+  return [body.brand, body.model, body.sleep_power || 0, body.dormancy_power || 0, body.usage_power || 0];
+}
+
+function getImportValues(category, row) {
+  if (category === 'phones' || category === 'mid_low_phones') {
+    return [
+      row['品牌'] || row['brand'] || '',
+      row['型号'] || row['model'] || '',
+      row['屏幕'] || row['screen'] || '',
+      row['处理器'] || row['processor'] || '',
+      row['内存'] || row['ram'] || '',
+      row['存储'] || row['storage'] || '',
+      row['摄像头'] || row['camera'] || '',
+      row['电池'] || row['battery'] || '',
+      row['价格'] || row['price'] || '',
+      row['电池容量'] || row['battery_capacity'] || '',
+      parseInt(row['视频播放功耗'] || row['video_power']) || 0,
+      parseInt(row['游戏功耗'] || row['game_power']) || 0,
+      parseInt(row['待机功耗'] || row['standby_power']) || 0,
+      parseInt(row['浏览网页功耗'] || row['browser_power']) || 0,
+    ];
+  }
+  return [
+    row['品牌'] || row['brand'] || '',
+    row['型号'] || row['model'] || '',
+    parseInt(row['睡眠功耗'] || row['sleep_power']) || 0,
+    parseInt(row['休眠功耗'] || row['dormancy_power']) || 0,
+    parseInt(row['使用功耗'] || row['usage_power']) || 0,
+  ];
+}
+
+app.get('/api/:category', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    const [rows] = await pool.query(`SELECT * FROM ${config.table} ORDER BY brand, model`);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error(`查询${config.name}数据失败:`, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/:category/:id', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    const [rows] = await pool.query(`SELECT * FROM ${config.table} WHERE id = ?`, [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: '数据不存在' });
+    }
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    console.error(`查询${config.name}详情失败:`, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/:category', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    const fields = getPhoneFields(category);
+    const values = getBodyValues(category, req.body);
+    const [result] = await pool.query(
+      `INSERT INTO ${config.table} (${fields.insert}) VALUES (${fields.placeholders}) ON DUPLICATE KEY UPDATE ${fields.update}`,
+      values
+    );
+    res.json({ success: true, message: '添加成功', insertId: result.insertId });
+  } catch (error) {
+    console.error(`添加${config.name}失败:`, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.put('/api/:category/:id', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    const fields = getPhoneFields(category);
+    const values = getBodyValues(category, req.body);
+    await pool.query(
+      `UPDATE ${config.table} SET ${fields.updateSet} WHERE id = ?`,
+      [...values, req.params.id]
+    );
+    res.json({ success: true, message: '更新成功' });
+  } catch (error) {
+    console.error(`更新${config.name}失败:`, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.delete('/api/:category/:id', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    await pool.query(`DELETE FROM ${config.table} WHERE id = ?`, [req.params.id]);
+    res.json({ success: true, message: '删除成功' });
+  } catch (error) {
+    console.error(`删除${config.name}失败:`, error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/api/:category/import', upload.single('file'), async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: '请上传文件' });
+    }
+
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    const fields = getPhoneFields(category);
+
+    for (const row of data) {
+      try {
+        const values = getImportValues(category, row);
+        await pool.query(
+          `INSERT INTO ${config.table} (${fields.insert}) VALUES (${fields.placeholders}) ON DUPLICATE KEY UPDATE ${fields.update}`,
+          values
+        );
+        successCount++;
+      } catch (err) {
+        console.error('导入行失败:', err);
+        failCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `导入完成，成功 ${successCount} 条，失败 ${failCount} 条`,
+      successCount,
+      failCount
+    });
+  } catch (error) {
+    console.error('导入文件失败:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 app.get('/api/phones', async (req, res) => {
   try {
@@ -153,8 +504,6 @@ app.delete('/api/phones/:id', async (req, res) => {
   }
 });
 
-const upload = multer({ dest: 'uploads/' });
-
 app.post('/api/phones/import', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -211,8 +560,8 @@ app.post('/api/phones/import', upload.single('file'), async (req, res) => {
       }
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `导入完成，成功 ${successCount} 条，失败 ${failCount} 条`,
       successCount,
       failCount
@@ -224,48 +573,44 @@ app.post('/api/phones/import', upload.single('file'), async (req, res) => {
 });
 
 app.get('/api/template/download', (req, res) => {
-  const templateData = [
-    {
-      '品牌': 'Apple',
-      '型号': 'iPhone 15',
-      '屏幕': '6.1英寸 OLED',
-      '处理器': 'A16 仿生芯片',
-      '内存': '6GB',
-      '存储': '128GB',
-      '摄像头': '4800万像素主摄',
-      '电池': '4000mAh',
-      '价格': '¥5999起',
-      '电池容量': '4000',
-      '视频播放功耗': 2500,
-      '游戏功耗': 4500,
-      '待机功耗': 50,
-      '浏览网页功耗': 1800
-    },
-    {
-      '品牌': 'Samsung',
-      '型号': 'Galaxy S24',
-      '屏幕': '6.2英寸 Dynamic AMOLED 2X',
-      '处理器': 'Snapdragon 8 Gen 3',
-      '内存': '8GB',
-      '存储': '256GB',
-      '摄像头': '5000万像素主摄 + 1200万像素超广角 + 1000万像素长焦',
-      '电池': '4000mAh',
-      '价格': '¥5999起',
-      '电池容量': '4000',
-      '视频播放功耗': 2800,
-      '游戏功耗': 4800,
-      '待机功耗': 60,
-      '浏览网页功耗': 2000
-    }
-  ];
+  const category = req.query.category || 'phones';
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+
+  let templateData;
+  if (category === 'phones' || category === 'mid_low_phones') {
+    templateData = [
+      {
+        '品牌': 'Apple', '型号': 'iPhone 15', '屏幕': '6.1英寸 OLED',
+        '处理器': 'A16 仿生芯片', '内存': '6GB', '存储': '128GB',
+        '摄像头': '4800万像素主摄', '电池': '4000mAh', '价格': '¥5999起',
+        '电池容量': '4000', '视频播放功耗': 2500, '游戏功耗': 4500,
+        '待机功耗': 50, '浏览网页功耗': 1800,
+      },
+      {
+        '品牌': 'Samsung', '型号': 'Galaxy S24', '屏幕': '6.2英寸 Dynamic AMOLED 2X',
+        '处理器': 'Snapdragon 8 Gen 3', '内存': '8GB', '存储': '256GB',
+        '摄像头': '5000万像素主摄 + 1200万像素超广角 + 1000万像素长焦',
+        '电池': '4000mAh', '价格': '¥5999起', '电池容量': '4000',
+        '视频播放功耗': 2800, '游戏功耗': 4800, '待机功耗': 60, '浏览网页功耗': 2000,
+      },
+    ];
+  } else {
+    templateData = [
+      { '品牌': 'Logitech', '型号': 'G502', '睡眠功耗': 70, '休眠功耗': 50, '使用功耗': 500 },
+      { '品牌': 'Xiaomi', '型号': 'Mi2', '睡眠功耗': 100, '休眠功耗': 50, '使用功耗': 600 },
+    ];
+  }
 
   const worksheet = xlsx.utils.json_to_sheet(templateData);
   const workbook = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(workbook, worksheet, '手机数据');
+  xlsx.utils.book_append_sheet(workbook, worksheet, config.name + '数据');
 
   const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-  
-  res.setHeader('Content-Disposition', 'attachment; filename=phone_template.xlsx');
+
+  res.setHeader('Content-Disposition', `attachment; filename=${category}_template.xlsx`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buffer);
 });

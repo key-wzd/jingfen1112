@@ -60,7 +60,43 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () => import('#/views/power-consumption/index.vue'),
         meta: {
           ignoreAccess: true,
-          title: '功耗对比',
+          title: '旗舰手机功耗对比',
+        },
+      },
+      {
+        name: 'MidLowPhonePower',
+        path: 'mid-low-phone-power',
+        component: () => import('#/views/mid-low-phone-power/index.vue'),
+        meta: {
+          ignoreAccess: true,
+          title: '中低端手机功耗对比',
+        },
+      },
+      {
+        name: 'MousePower',
+        path: 'mouse-power',
+        component: () => import('#/views/mouse-power/index.vue'),
+        meta: {
+          ignoreAccess: true,
+          title: '鼠标功耗对比',
+        },
+      },
+      {
+        name: 'KeyboardPower',
+        path: 'keyboard-power',
+        component: () => import('#/views/keyboard-power/index.vue'),
+        meta: {
+          ignoreAccess: true,
+          title: '键盘功耗对比',
+        },
+      },
+      {
+        name: 'RemoteControlPower',
+        path: 'remote-control-power',
+        component: () => import('#/views/remote-control-power/index.vue'),
+        meta: {
+          ignoreAccess: true,
+          title: '遥控器功耗对比',
         },
       },
       {
@@ -106,7 +142,7 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () =>
           import('#/views/_core/authentication/qrcode-login.vue'),
         meta: {
-          title: $t('page.auth.qrcodeLogin'),
+          title: $t('page.auth.qrCodeLogin'),
         },
       },
       {

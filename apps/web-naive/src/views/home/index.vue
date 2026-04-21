@@ -1,6 +1,5 @@
 <template>
   <div class="home-page">
-    <!-- 导航栏 -->
     <header class="navbar">
       <div class="container">
         <div class="logo">
@@ -8,19 +7,22 @@
         </div>
         <nav class="nav-links">
           <a href="/" class="active">首页</a>
-          <a href="/compare">产品对比</a>
-          <a href="/power-consumption">功耗对比</a>
+          <a href="/power-consumption">旗舰手机功耗</a>
+          <a href="/mid-low-phone-power">中低端手机功耗</a>
+          <a href="/mouse-power">鼠标功耗</a>
+          <a href="/keyboard-power">键盘功耗</a>
+          <a href="/remote-control-power">遥控器功耗</a>
+          <a href="/config">数据管理</a>
         </nav>
       </div>
     </header>
 
-    <!-- 轮播组件 -->
     <section class="carousel-section">
       <div class="carousel" ref="carouselRef">
         <div class="carousel-inner" :style="{ transform: `translateX(-${currentIndex * 100}%)` }">
-          <div 
-            v-for="(item, index) in carouselItems" 
-            :key="index" 
+          <div
+            v-for="(item, index) in carouselItems"
+            :key="index"
             class="carousel-item"
             @click="goToCompare"
           >
@@ -33,10 +35,10 @@
           </div>
         </div>
         <div class="carousel-indicators">
-          <button 
-            v-for="(item, index) in carouselItems" 
+          <button
+            v-for="(item, index) in carouselItems"
             :key="index"
-            class="indicator" 
+            class="indicator"
             :class="{ active: currentIndex === index }"
             @click="currentIndex = index"
           ></button>
@@ -44,7 +46,6 @@
       </div>
     </section>
 
-    <!-- 特色功能 -->
     <section class="features-section">
       <div class="container">
         <h2 class="section-title">为什么选择我们</h2>
@@ -74,14 +75,46 @@
       </div>
     </section>
 
-    <!-- 热门对比 -->
+    <section class="power-comparison-section">
+      <div class="container">
+        <h2 class="section-title">功耗对比</h2>
+        <div class="power-grid">
+          <a href="/power-consumption" class="power-card">
+            <div class="power-icon">📱</div>
+            <h3>旗舰手机功耗</h3>
+            <p>对比旗舰手机各场景功耗表现</p>
+          </a>
+          <a href="/mid-low-phone-power" class="power-card">
+            <div class="power-icon">📲</div>
+            <h3>中低端手机功耗</h3>
+            <p>对比中低端手机各场景功耗表现</p>
+          </a>
+          <a href="/mouse-power" class="power-card">
+            <div class="power-icon">🖱️</div>
+            <h3>鼠标功耗</h3>
+            <p>对比鼠标各场景功耗表现</p>
+          </a>
+          <a href="/keyboard-power" class="power-card">
+            <div class="power-icon">⌨️</div>
+            <h3>键盘功耗</h3>
+            <p>对比键盘各场景功耗表现</p>
+          </a>
+          <a href="/remote-control-power" class="power-card">
+            <div class="power-icon">🎮</div>
+            <h3>遥控器功耗</h3>
+            <p>对比遥控器各场景功耗表现</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
     <section class="popular-section">
       <div class="container">
         <h2 class="section-title">热门对比</h2>
         <div class="popular-grid">
-          <div 
-            v-for="(item, index) in popularItems" 
-            :key="index" 
+          <div
+            v-for="(item, index) in popularItems"
+            :key="index"
             class="popular-card"
             @click="goToCompare"
           >
@@ -93,7 +126,6 @@
       </div>
     </section>
 
-    <!-- 页脚 -->
     <footer class="footer">
       <div class="container">
         <div class="footer-content">
@@ -105,7 +137,12 @@
             <h4>快速链接</h4>
             <ul>
               <li><a href="/">首页</a></li>
-              <li><a href="/compare">产品对比</a></li>
+              <li><a href="/power-consumption">旗舰手机功耗</a></li>
+              <li><a href="/mid-low-phone-power">中低端手机功耗</a></li>
+              <li><a href="/mouse-power">鼠标功耗</a></li>
+              <li><a href="/keyboard-power">键盘功耗</a></li>
+              <li><a href="/remote-control-power">遥控器功耗</a></li>
+              <li><a href="/config">数据管理</a></li>
             </ul>
           </div>
         </div>
@@ -126,7 +163,6 @@ const carouselRef = ref<HTMLElement>();
 const currentIndex = ref(0);
 let carouselInterval: number | undefined;
 
-// 轮播数据
 const carouselItems = [
   {
     title: '最新手机对比',
@@ -145,7 +181,6 @@ const carouselItems = [
   }
 ];
 
-// 热门对比数据
 const popularItems = [
   {
     title: 'iPhone 15 vs 三星 S24',
@@ -159,14 +194,12 @@ const popularItems = [
   }
 ];
 
-// 轮播自动播放
 const startCarousel = () => {
   carouselInterval = window.setInterval(() => {
     currentIndex.value = (currentIndex.value + 1) % carouselItems.length;
   }, 5000);
 };
 
-// 跳转到对比页面
 const goToCompare = () => {
   router.push('/compare');
 };
@@ -188,7 +221,6 @@ onUnmounted(() => {
   background-color: #f5f5f5;
 }
 
-/* 导航栏 */
 .navbar {
   background-color: #fff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -219,15 +251,17 @@ onUnmounted(() => {
 
 .nav-links {
   display: flex;
-  gap: 30px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
   text-decoration: none;
   color: #666;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: color 0.3s;
+  white-space: nowrap;
 }
 
 .nav-links a:hover,
@@ -235,7 +269,6 @@ onUnmounted(() => {
   color: #007bff;
 }
 
-/* 轮播 */
 .carousel-section {
   position: relative;
   overflow: hidden;
@@ -326,7 +359,6 @@ onUnmounted(() => {
   background-color: white;
 }
 
-/* 特色功能 */
 .features-section {
   padding: 60px 0;
   background-color: white;
@@ -376,7 +408,51 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* 热门对比 */
+.power-comparison-section {
+  padding: 60px 0;
+  background-color: white;
+  margin-bottom: 60px;
+}
+
+.power-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.power-card {
+  background-color: #f9f9f9;
+  padding: 30px 20px;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.3s, box-shadow 0.3s;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+}
+
+.power-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.power-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.power-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.power-card p {
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+}
+
 .popular-section {
   padding: 60px 0;
   margin-bottom: 60px;
@@ -420,7 +496,6 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* 页脚 */
 .footer {
   background-color: #333;
   color: white;
@@ -475,7 +550,6 @@ onUnmounted(() => {
   color: #ccc;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .navbar .container {
     flex-direction: column;

@@ -7,8 +7,11 @@
         </div>
         <nav class="nav-links">
           <a href="/">首页</a>
-          <a href="/compare">产品对比</a>
-          <a href="/power-consumption">功耗对比</a>
+          <a href="/power-consumption">旗舰手机功耗</a>
+          <a href="/mid-low-phone-power">中低端手机功耗</a>
+          <a href="/mouse-power">鼠标功耗</a>
+          <a href="/keyboard-power">键盘功耗</a>
+          <a href="/remote-control-power">遥控器功耗</a>
           <a href="/config" class="active">数据管理</a>
         </nav>
       </div>
@@ -17,14 +20,26 @@
     <main class="container">
       <h2 class="page-title">数据管理</h2>
 
+      <section class="category-tabs">
+        <button
+          v-for="cat in categories"
+          :key="cat.key"
+          class="tab-btn"
+          :class="{ active: currentCategory === cat.key }"
+          @click="switchCategory(cat.key)"
+        >
+          {{ cat.name }}
+        </button>
+      </section>
+
       <section class="upload-section">
-        <h3>导入Excel数据</h3>
+        <h3>导入Excel数据 - {{ currentCategoryName }}</h3>
         <div class="upload-area">
           <div class="upload-box" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDrop">
-            <input 
-              ref="fileInputRef" 
-              type="file" 
-              accept=".xlsx,.xls" 
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept=".xlsx,.xls"
               @change="handleFileChange"
               style="display: none"
             />
@@ -38,7 +53,7 @@
           </div>
           <div class="upload-actions">
             <button class="btn btn-primary" @click="downloadTemplate">
-              下载模板
+              下载{{ currentCategoryName }}模板
             </button>
           </div>
         </div>
@@ -49,8 +64,8 @@
 
       <section class="data-section">
         <div class="section-header">
-          <h3>手机数据列表</h3>
-          <button class="btn btn-primary" @click="showAddModal">添加手机</button>
+          <h3>{{ currentCategoryName }}数据列表</h3>
+          <button class="btn btn-primary" @click="showAddModal">添加{{ currentCategoryName }}</button>
         </div>
 
         <div class="table-container">
@@ -60,33 +75,39 @@
                 <th>ID</th>
                 <th>品牌</th>
                 <th>型号</th>
-                <th>处理器</th>
-                <th>内存</th>
-                <th>存储</th>
-                <th>电池容量</th>
-                <th>价格</th>
+                <th v-if="isPhoneCategory">处理器</th>
+                <th v-if="isPhoneCategory">内存</th>
+                <th v-if="isPhoneCategory">存储</th>
+                <th v-if="isPhoneCategory">电池容量</th>
+                <th v-if="isPhoneCategory">价格</th>
+                <th v-if="!isPhoneCategory">睡眠功耗</th>
+                <th v-if="!isPhoneCategory">休眠功耗</th>
+                <th v-if="!isPhoneCategory">使用功耗</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="9" class="loading-cell">加载中...</td>
+                <td :colspan="tableColCount" class="loading-cell">加载中...</td>
               </tr>
-              <tr v-else-if="phones.length === 0">
-                <td colspan="9" class="empty-cell">暂无数据</td>
+              <tr v-else-if="items.length === 0">
+                <td :colspan="tableColCount" class="empty-cell">暂无数据</td>
               </tr>
-              <tr v-else v-for="phone in phones" :key="phone.id">
-                <td>{{ phone.id }}</td>
-                <td>{{ phone.brand }}</td>
-                <td>{{ phone.model }}</td>
-                <td>{{ phone.processor }}</td>
-                <td>{{ phone.ram }}</td>
-                <td>{{ phone.storage }}</td>
-                <td>{{ phone.battery_capacity }}mAh</td>
-                <td>{{ phone.price }}</td>
+              <tr v-else v-for="item in items" :key="item.id">
+                <td>{{ item.id }}</td>
+                <td>{{ item.brand }}</td>
+                <td>{{ item.model }}</td>
+                <td v-if="isPhoneCategory">{{ item.processor }}</td>
+                <td v-if="isPhoneCategory">{{ item.ram }}</td>
+                <td v-if="isPhoneCategory">{{ item.storage }}</td>
+                <td v-if="isPhoneCategory">{{ item.battery_capacity }}mAh</td>
+                <td v-if="isPhoneCategory">{{ item.price }}</td>
+                <td v-if="!isPhoneCategory">{{ item.sleep_power }}mW</td>
+                <td v-if="!isPhoneCategory">{{ item.dormancy_power }}mW</td>
+                <td v-if="!isPhoneCategory">{{ item.usage_power }}mW</td>
                 <td class="actions">
-                  <button class="btn btn-small btn-info" @click="showEditModal(phone)">编辑</button>
-                  <button class="btn btn-small btn-danger" @click="deletePhone(phone)">删除</button>
+                  <button class="btn btn-small btn-info" @click="showEditModal(item)">编辑</button>
+                  <button class="btn btn-small btn-danger" @click="deleteItem(item)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -98,11 +119,11 @@
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ isEdit ? '编辑手机' : '添加手机' }}</h3>
+          <h3>{{ isEdit ? '编辑' : '添加' }}{{ currentCategoryName }}</h3>
           <button class="close-btn" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
-          <form @submit.prevent="savePhone">
+          <form @submit.prevent="saveItem">
             <div class="form-row">
               <div class="form-group">
                 <label>品牌 *</label>
@@ -113,65 +134,89 @@
                 <input v-model="formData.model" type="text" required placeholder="如: iPhone 15" />
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>屏幕</label>
-                <input v-model="formData.screen" type="text" placeholder="如: 6.1英寸 OLED" />
+
+            <template v-if="isPhoneCategory">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>屏幕</label>
+                  <input v-model="formData.screen" type="text" placeholder="如: 6.1英寸 OLED" />
+                </div>
+                <div class="form-group">
+                  <label>处理器</label>
+                  <input v-model="formData.processor" type="text" placeholder="如: A16 仿生芯片" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>内存</label>
+                  <input v-model="formData.ram" type="text" placeholder="如: 6GB" />
+                </div>
+                <div class="form-group">
+                  <label>存储</label>
+                  <input v-model="formData.storage" type="text" placeholder="如: 128GB" />
+                </div>
               </div>
               <div class="form-group">
-                <label>处理器</label>
-                <input v-model="formData.processor" type="text" placeholder="如: A16 仿生芯片" />
+                <label>摄像头</label>
+                <input v-model="formData.camera" type="text" placeholder="如: 4800万像素主摄" />
               </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>内存</label>
-                <input v-model="formData.ram" type="text" placeholder="如: 6GB" />
-              </div>
-              <div class="form-group">
-                <label>存储</label>
-                <input v-model="formData.storage" type="text" placeholder="如: 128GB" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label>摄像头</label>
-              <input v-model="formData.camera" type="text" placeholder="如: 4800万像素主摄" />
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>电池</label>
-                <input v-model="formData.battery" type="text" placeholder="如: 4000mAh" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label>电池</label>
+                  <input v-model="formData.battery" type="text" placeholder="如: 4000mAh" />
+                </div>
+                <div class="form-group">
+                  <label>电池容量</label>
+                  <input v-model="formData.battery_capacity" type="text" placeholder="如: 4000" />
+                </div>
               </div>
               <div class="form-group">
-                <label>电池容量</label>
-                <input v-model="formData.battery_capacity" type="text" placeholder="如: 4000" />
+                <label>价格</label>
+                <input v-model="formData.price" type="text" placeholder="如: ¥5999起" />
               </div>
-            </div>
-            <div class="form-group">
-              <label>价格</label>
-              <input v-model="formData.price" type="text" placeholder="如: ¥5999起" />
-            </div>
-            <div class="form-section-title">功耗数据</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>视频播放功耗</label>
-                <input v-model.number="formData.video_power" type="number" placeholder="单位: mW" />
+              <div class="form-section-title">功耗数据</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>视频播放功耗</label>
+                  <input v-model.number="formData.video_power" type="number" placeholder="单位: mW" />
+                </div>
+                <div class="form-group">
+                  <label>游戏功耗</label>
+                  <input v-model.number="formData.game_power" type="number" placeholder="单位: mW" />
+                </div>
               </div>
-              <div class="form-group">
-                <label>游戏功耗</label>
-                <input v-model.number="formData.game_power" type="number" placeholder="单位: mW" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label>待机功耗</label>
+                  <input v-model.number="formData.standby_power" type="number" placeholder="单位: mW" />
+                </div>
+                <div class="form-group">
+                  <label>浏览网页功耗</label>
+                  <input v-model.number="formData.browser_power" type="number" placeholder="单位: mW" />
+                </div>
               </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>待机功耗</label>
-                <input v-model.number="formData.standby_power" type="number" placeholder="单位: mW" />
+            </template>
+
+            <template v-else>
+              <div class="form-section-title">功耗数据</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>睡眠功耗</label>
+                  <input v-model.number="formData.sleep_power" type="number" placeholder="单位: mW" />
+                </div>
+                <div class="form-group">
+                  <label>休眠功耗</label>
+                  <input v-model.number="formData.dormancy_power" type="number" placeholder="单位: mW" />
+                </div>
               </div>
-              <div class="form-group">
-                <label>浏览网页功耗</label>
-                <input v-model.number="formData.browser_power" type="number" placeholder="单位: mW" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label>使用功耗</label>
+                  <input v-model.number="formData.usage_power" type="number" placeholder="单位: mW" />
+                </div>
               </div>
-            </div>
+            </template>
+
             <div class="form-actions">
               <button type="button" class="btn btn-default" @click="closeModal">取消</button>
               <button type="submit" class="btn btn-primary">保存</button>
@@ -192,40 +237,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { dbApi, type Phone } from '#/api/db';
+import { ref, computed, onMounted } from 'vue';
+import { dbApi, type CategoryInfo } from '#/api/db';
 
-const phones = ref<Phone[]>([]);
+const categories = ref<CategoryInfo[]>([]);
+const currentCategory = ref('phones');
+const items = ref<any[]>([]);
 const loading = ref(false);
 const showModal = ref(false);
 const isEdit = ref(false);
 const importResult = ref<{ success: boolean; message: string } | null>(null);
 const fileInputRef = ref<HTMLInputElement>();
 
-const formData = ref<Partial<Phone>>({
-  brand: '',
-  model: '',
-  screen: '',
-  processor: '',
-  ram: '',
-  storage: '',
-  camera: '',
-  battery: '',
-  price: '',
-  battery_capacity: '',
-  video_power: 0,
-  game_power: 0,
-  standby_power: 0,
-  browser_power: 0,
+const isPhoneCategory = computed(() => {
+  return currentCategory.value === 'phones' || currentCategory.value === 'mid_low_phones';
 });
 
-const loadPhones = async () => {
-  loading.value = true;
-  const result = await dbApi.getPhones();
+const currentCategoryName = computed(() => {
+  const cat = categories.value.find(c => c.key === currentCategory.value);
+  return cat?.name || '';
+});
+
+const tableColCount = computed(() => {
+  return isPhoneCategory.value ? 9 : 7;
+});
+
+const getPhoneFormData = () => ({
+  brand: '', model: '', screen: '', processor: '', ram: '', storage: '',
+  camera: '', battery: '', price: '', battery_capacity: '',
+  video_power: 0, game_power: 0, standby_power: 0, browser_power: 0,
+});
+
+const getPeripheralFormData = () => ({
+  brand: '', model: '', sleep_power: 0, dormancy_power: 0, usage_power: 0,
+});
+
+const formData = ref<Record<string, any>>(getPhoneFormData());
+
+const loadCategories = async () => {
+  const result = await dbApi.getCategories();
   if (result.success && result.data) {
-    phones.value = result.data;
+    categories.value = result.data;
+  }
+};
+
+const loadItems = async () => {
+  loading.value = true;
+  const result = await dbApi.getList(currentCategory.value);
+  if (result.success && result.data) {
+    items.value = result.data;
   }
   loading.value = false;
+};
+
+const switchCategory = (category: string) => {
+  currentCategory.value = category;
+  importResult.value = null;
+  loadItems();
 };
 
 const triggerFileInput = () => {
@@ -250,41 +318,26 @@ const handleDrop = async (event: DragEvent) => {
 
 const importFile = async (file: File) => {
   importResult.value = null;
-  const result = await dbApi.importExcel(file);
+  const result = await dbApi.importExcel(currentCategory.value, file);
   importResult.value = { success: result.success, message: result.message || '' };
   if (result.success) {
-    await loadPhones();
+    await loadItems();
   }
 };
 
 const downloadTemplate = () => {
-  dbApi.downloadTemplate();
+  dbApi.downloadTemplate(currentCategory.value);
 };
 
 const showAddModal = () => {
   isEdit.value = false;
-  formData.value = {
-    brand: '',
-    model: '',
-    screen: '',
-    processor: '',
-    ram: '',
-    storage: '',
-    camera: '',
-    battery: '',
-    price: '',
-    battery_capacity: '',
-    video_power: 0,
-    game_power: 0,
-    standby_power: 0,
-    browser_power: 0,
-  };
+  formData.value = isPhoneCategory.value ? getPhoneFormData() : getPeripheralFormData();
   showModal.value = true;
 };
 
-const showEditModal = (phone: Phone) => {
+const showEditModal = (item: any) => {
   isEdit.value = true;
-  formData.value = { ...phone };
+  formData.value = { ...item };
   showModal.value = true;
 };
 
@@ -292,19 +345,19 @@ const closeModal = () => {
   showModal.value = false;
 };
 
-const savePhone = async () => {
+const saveItem = async () => {
   if (isEdit.value && formData.value.id) {
-    const result = await dbApi.updatePhone(formData.value.id, formData.value);
+    const result = await dbApi.updateItem(currentCategory.value, formData.value.id, formData.value);
     if (result.success) {
-      await loadPhones();
+      await loadItems();
       closeModal();
     } else {
       alert(result.message || '保存失败');
     }
   } else {
-    const result = await dbApi.addPhone(formData.value);
+    const result = await dbApi.addItem(currentCategory.value, formData.value);
     if (result.success) {
-      await loadPhones();
+      await loadItems();
       closeModal();
     } else {
       alert(result.message || '添加失败');
@@ -312,20 +365,21 @@ const savePhone = async () => {
   }
 };
 
-const deletePhone = async (phone: Phone) => {
-  if (!confirm(`确定要删除 ${phone.brand} ${phone.model} 吗？`)) {
+const deleteItem = async (item: any) => {
+  if (!confirm(`确定要删除 ${item.brand} ${item.model} 吗？`)) {
     return;
   }
-  const result = await dbApi.deletePhone(phone.id);
+  const result = await dbApi.deleteItem(currentCategory.value, item.id);
   if (result.success) {
-    await loadPhones();
+    await loadItems();
   } else {
     alert(result.message || '删除失败');
   }
 };
 
-onMounted(() => {
-  loadPhones();
+onMounted(async () => {
+  await loadCategories();
+  await loadItems();
 });
 </script>
 
@@ -365,15 +419,17 @@ onMounted(() => {
 
 .nav-links {
   display: flex;
-  gap: 30px;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
   text-decoration: none;
   color: #666;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: color 0.3s;
+  white-space: nowrap;
 }
 
 .nav-links a:hover,
@@ -385,6 +441,35 @@ onMounted(() => {
   font-size: 2rem;
   margin: 40px 0 30px;
   color: #333;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.3s;
+  color: #333;
+}
+
+.tab-btn:hover {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.tab-btn.active {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
 }
 
 .upload-section {

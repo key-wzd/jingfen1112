@@ -1,8 +1,8 @@
 <template>
   <PowerComparisonPage
-    category="phones"
-    pageTitle="旗舰手机功耗对比"
-    categoryName="旗舰手机"
+    category="mid_low_phones"
+    pageTitle="中低端手机功耗对比"
+    categoryName="中低端手机"
     :chartConfigs="chartConfigs"
     :displayColumns="displayColumns"
   />
