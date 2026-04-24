@@ -105,22 +105,28 @@ const activeCategoryData = computed(() => {
 
 const loadData = async () => {
   loading.value = true;
-  const [catResult, dataResult] = await Promise.all([
-    dbApi.getCategories(),
-    dbApi.getAllData(),
-  ]);
+  try {
+    const [catResult, dataResult] = await Promise.all([
+      dbApi.getCategories(),
+      dbApi.getAllData(),
+    ]);
 
-  if (catResult.success && catResult.data) {
-    categories.value = catResult.data;
-    if (categories.value.length > 0 && !activeCategory.value) {
-      activeCategory.value = categories.value[0].key;
+    if (catResult.success && catResult.data) {
+      categories.value = catResult.data;
+      if (categories.value.length > 0 && !activeCategory.value) {
+        activeCategory.value = categories.value[0].key;
+      }
     }
-  }
 
-  if (dataResult.success && dataResult.data) {
-    allData.value = dataResult.data;
+    if (dataResult.success && dataResult.data) {
+      allData.value = dataResult.data;
+    } else {
+      allData.value = {};
+    }
+  } catch (e) {
+    console.error('加载数据失败:', e);
+    allData.value = {};
   }
-
   loading.value = false;
 };
 
@@ -147,9 +153,11 @@ const handleUpload = async () => {
   uploading.value = false;
 
   if (result.success) {
+    const s = result.totalSuccess ?? result.successCount ?? 0;
+    const f = result.totalFail ?? result.failCount ?? 0;
     uploadResult.value = {
       success: true,
-      message: `导入成功！成功 ${result.successCount || 0} 条，失败 ${result.failCount || 0} 条`,
+      message: `导入成功！成功 ${s} 条，失败 ${f} 条`,
     };
     selectedFile.value = null;
     if (fileInput.value) {

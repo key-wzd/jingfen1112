@@ -53,7 +53,7 @@ const CHART_TYPE_MAP = {
   '折线图': 'line',
   '柱状图': 'bar',
   '纵向柱状图': 'bar',
-  '横向柱状图': 'bar',
+  '横向柱状图': 'barH',
   '饼图': 'pie',
   '雷达图': 'radar',
 };
@@ -306,21 +306,6 @@ function getImportValuesPeripheral(row) {
   ];
 }
 
-app.get('/api/:category', async (req, res) => {
-  const category = req.params.category;
-  const config = CATEGORY_CONFIG[category];
-  if (!config) {
-    return res.status(404).json({ success: false, message: '类别不存在' });
-  }
-  try {
-    const [rows] = await pool.query(`SELECT * FROM ${config.table} ORDER BY brand, model`);
-    res.json({ success: true, data: rows });
-  } catch (error) {
-    console.error(`查询${config.name}数据失败:`, error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
 app.get('/api/all-data', async (req, res) => {
   try {
     const result = {};
@@ -397,6 +382,13 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
 
       for (const row of data) {
         try {
+          const brand = row['品牌'] || row['brand'] || '';
+          const model = row['型号'] || row['model'] || '';
+          
+          if (!brand && !model) {
+            continue;
+          }
+
           const values = getValues(row);
           await pool.query(
             `INSERT INTO ${config.table} (${fields.insert}) VALUES (${fields.placeholders}) ON DUPLICATE KEY UPDATE ${fields.update}`,
@@ -496,6 +488,21 @@ app.get('/api/models/:brand', async (req, res) => {
     res.json({ success: true, data: rows.map(r => r.model) });
   } catch (error) {
     console.error('查询型号失败:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/:category', async (req, res) => {
+  const category = req.params.category;
+  const config = CATEGORY_CONFIG[category];
+  if (!config) {
+    return res.status(404).json({ success: false, message: '类别不存在' });
+  }
+  try {
+    const [rows] = await pool.query(`SELECT * FROM ${config.table} ORDER BY brand, model`);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error(`查询${config.name}数据失败:`, error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

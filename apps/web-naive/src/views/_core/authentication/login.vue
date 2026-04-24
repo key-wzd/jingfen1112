@@ -176,6 +176,7 @@ const handleLogin = async () => {
   transition: border-color 0.3s;
   box-sizing: border-box;
   color: #333;
+  background-color: #f5f5f5;
 }
 
 .form-group input:focus {

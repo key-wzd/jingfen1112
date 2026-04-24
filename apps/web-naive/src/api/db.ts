@@ -33,7 +33,7 @@ export interface Peripheral {
 
 export interface ChartConfigItem {
   scenario: string;
-  chartType: 'bar' | 'line';
+  chartType: 'bar' | 'barH' | 'line';
   fields: string[];
   labels: string[];
 }

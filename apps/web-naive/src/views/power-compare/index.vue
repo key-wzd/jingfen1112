@@ -153,6 +153,7 @@ const createCharts = () => {
     if (!chartDom) return;
 
     const chart = echarts.init(chartDom);
+    const isHorizontal = config.chartType === 'barH';
     const isSingleField = config.fields.length === 1;
 
     if (isSingleField) {
@@ -162,31 +163,56 @@ const createCharts = () => {
         value: p[field] || 0,
       }));
 
-      chart.setOption({
-        title: { text: config.scenario, left: 'center' },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
-        xAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { rotate: 45 } },
-        yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-        series: [{ name: config.labels[0], type: config.chartType, data: data.map(d => d.value), smooth: true }],
-      });
+      if (isHorizontal) {
+        chart.setOption({
+          title: { text: config.scenario, left: 'center' },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+          xAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
+          yAxis: { type: 'category', data: data.map(d => d.name) },
+          series: [{ name: config.labels[0], type: 'bar', data: data.map(d => d.value) }],
+        });
+      } else {
+        const seriesType = config.chartType === 'line' ? 'line' : 'bar';
+        chart.setOption({
+          title: { text: config.scenario, left: 'center' },
+          tooltip: { trigger: 'axis', axisPointer: { type: seriesType === 'line' ? 'line' : 'shadow' } },
+          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+          xAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { rotate: 45 } },
+          yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
+          series: [{ name: config.labels[0], type: seriesType, data: data.map(d => d.value), smooth: seriesType === 'line' }],
+        });
+      }
     } else {
+      const seriesType = isHorizontal ? 'bar' : (config.chartType === 'line' ? 'line' : 'bar');
       const series = selectedProducts.value.map(p => ({
         name: `${p.brand} ${p.model}`,
-        type: config.chartType,
+        type: seriesType,
         data: config.fields.map(f => p[f] || 0),
-        smooth: true,
+        smooth: seriesType === 'line',
       }));
 
-      chart.setOption({
-        title: { text: config.scenario, left: 'center' },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { data: selectedProducts.value.map(p => `${p.brand} ${p.model}`), bottom: 0 },
-        grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
-        xAxis: { type: 'category', data: config.labels, axisLabel: { rotate: 45 } },
-        yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-        series,
-      });
+      if (isHorizontal) {
+        chart.setOption({
+          title: { text: config.scenario, left: 'center' },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          legend: { data: selectedProducts.value.map(p => `${p.brand} ${p.model}`), bottom: 0 },
+          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+          xAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
+          yAxis: { type: 'category', data: config.labels },
+          series,
+        });
+      } else {
+        chart.setOption({
+          title: { text: config.scenario, left: 'center' },
+          tooltip: { trigger: 'axis', axisPointer: { type: seriesType === 'line' ? 'line' : 'shadow' } },
+          legend: { data: selectedProducts.value.map(p => `${p.brand} ${p.model}`), bottom: 0 },
+          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+          xAxis: { type: 'category', data: config.labels, axisLabel: { rotate: 45 } },
+          yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
+          series,
+        });
+      }
     }
 
     window.addEventListener('resize', () => chart.resize());
