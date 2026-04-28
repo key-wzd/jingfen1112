@@ -1,9 +1,10 @@
 const DB_SERVER_URL = `${window.location.protocol}//${window.location.hostname}:3001`;
 
-export interface Phone {
+export interface PhoneInfo {
   id: number;
   brand: string;
   model: string;
+  image: string;
   screen: string;
   processor: string;
   ram: string;
@@ -12,6 +13,14 @@ export interface Phone {
   battery: string;
   price: string;
   battery_capacity: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhonePower {
+  id: number;
+  brand: string;
+  model: string;
   video_power: number;
   game_power: number;
   standby_power: number;
@@ -20,7 +29,17 @@ export interface Phone {
   updated_at: string;
 }
 
-export interface Peripheral {
+export interface PeripheralInfo {
+  id: number;
+  brand: string;
+  model: string;
+  image: string;
+  battery_capacity: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PeripheralPower {
   id: number;
   brand: string;
   model: string;
@@ -42,23 +61,48 @@ export interface DisplayColumn {
   key: string;
   label: string;
   suffix?: string;
+  type?: string;
+}
+
+export interface CategoryInfoConfig {
+  table: string;
+  fields: string[];
+  cnFields: string[];
+  displayColumns: DisplayColumn[];
+}
+
+export interface CategoryPowerConfig {
+  table: string;
+  fields: string[];
+  cnFields: string[];
+  chartConfig: ChartConfigItem[];
+  displayColumns: DisplayColumn[];
 }
 
 export interface CategoryInfo {
   key: string;
   name: string;
+  info: CategoryInfoConfig;
+  power: CategoryPowerConfig;
+}
+
+export interface CategoryInfoData {
   table: string;
-  chartConfig: ChartConfigItem[];
   displayColumns: DisplayColumn[];
-  fields: string[];
-  cnFields: string[];
+  data: any[];
+}
+
+export interface CategoryPowerData {
+  table: string;
+  displayColumns: DisplayColumn[];
+  chartConfig: ChartConfigItem[];
+  data: any[];
 }
 
 export interface CategoryData {
   name: string;
-  table: string;
-  displayColumns: DisplayColumn[];
-  data: any[];
+  info: CategoryInfoData;
+  power: CategoryPowerData;
 }
 
 export interface ApiResponse<T = any> {
@@ -67,6 +111,8 @@ export interface ApiResponse<T = any> {
   message?: string;
   successCount?: number;
   failCount?: number;
+  totalSuccess?: number;
+  totalFail?: number;
 }
 
 export interface AllDataResponse {
@@ -89,6 +135,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<ApiRespon
   }
 }
 
+export function getImageUrl(imagePath: string): string {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  return `${DB_SERVER_URL}${imagePath}`;
+}
+
 export const dbApi = {
   async getCategories(): Promise<ApiResponse<CategoryInfo[]>> {
     return request<CategoryInfo[]>('/api/categories');
@@ -96,6 +148,14 @@ export const dbApi = {
 
   async getCategoryChartConfig(category: string): Promise<ApiResponse<ChartConfigItem[]>> {
     return request<ChartConfigItem[]>(`/api/categories/${category}/chart-config`);
+  },
+
+  async getInfoList(category: string): Promise<ApiResponse<any[]>> {
+    return request<any[]>(`/api/${category}/info`);
+  },
+
+  async getPowerList(category: string): Promise<ApiResponse<any[]>> {
+    return request<any[]>(`/api/${category}/power`);
   },
 
   async getList(category: string): Promise<ApiResponse<any[]>> {
@@ -133,5 +193,48 @@ export const dbApi = {
 
   async getModels(brand: string): Promise<ApiResponse<string[]>> {
     return request<string[]>(`/api/models/${encodeURIComponent(brand)}`);
+  },
+
+  async uploadImage(category: string, id: number, file: File): Promise<ApiResponse<{ image: string }>> {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch(`${DB_SERVER_URL}/api/${category}/info/${id}/image`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('上传图片失败:', error);
+      return { success: false, message: '上传图片失败' };
+    }
+  },
+
+  async updateInfo(category: string, id: number, updates: Record<string, any>): Promise<ApiResponse> {
+    return request(`/api/${category}/info/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deleteInfo(category: string, id: number): Promise<ApiResponse> {
+    return request(`/api/${category}/info/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updatePower(category: string, id: number, updates: Record<string, any>): Promise<ApiResponse> {
+    return request(`/api/${category}/power/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deletePower(category: string, id: number): Promise<ApiResponse> {
+    return request(`/api/${category}/power/${id}`, {
+      method: 'DELETE',
+    });
   },
 };

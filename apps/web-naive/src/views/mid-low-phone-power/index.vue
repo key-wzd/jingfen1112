@@ -20,7 +20,5 @@ const chartConfigs: ChartConfigItem[] = [
 const displayColumns: DisplayColumn[] = [
   { key: 'brand', label: '品牌' },
   { key: 'model', label: '型号' },
-  { key: 'battery_capacity', label: '电池容量', suffix: 'mAh' },
-  { key: 'processor', label: '处理器' },
 ];
 </script>

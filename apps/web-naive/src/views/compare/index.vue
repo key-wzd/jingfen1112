@@ -57,14 +57,25 @@
             <thead>
               <tr>
                 <th class="param-col">参数</th>
-                <th v-for="(p, i) in selectedProducts" :key="i">{{ p.brand }} {{ p.model }}</th>
+                <th v-for="(p, i) in selectedProducts" :key="i">
+                  <div class="product-header">
+                    <img v-if="p.image" :src="getImageUrl(p.image)" class="product-thumb" />
+                    <span>{{ p.brand }} {{ p.model }}</span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="field in displayFields" :key="field.key">
                 <td class="param-col">{{ field.label }}</td>
                 <td v-for="(p, i) in selectedProducts" :key="i">
-                  {{ p[field.key] || '-' }}
+                  <template v-if="field.key === 'image'">
+                    <img v-if="p.image" :src="getImageUrl(p.image)" class="compare-image" />
+                    <span v-else>-</span>
+                  </template>
+                  <template v-else>
+                    {{ p[field.key] || '-' }}
+                  </template>
                 </td>
               </tr>
             </tbody>
@@ -90,7 +101,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { dbApi } from '#/api/db';
+import { dbApi, getImageUrl } from '#/api/db';
 
 const router = useRouter();
 const route = useRoute();
@@ -98,7 +109,7 @@ const route = useRoute();
 const category = computed(() => route.params.category as string);
 
 const categoryName = ref('');
-const displayFields = ref<{ key: string; label: string }[]>([]);
+const displayFields = ref<{ key: string; label: string; type?: string }[]>([]);
 
 const brands = ref<string[]>([]);
 const allData = ref<any[]>([]);
@@ -126,20 +137,20 @@ const loadCategoryConfig = async () => {
     const catInfo = result.data.find((c: any) => c.key === category.value);
     if (catInfo) {
       categoryName.value = catInfo.name;
-      const fields: string[] = catInfo.fields || [];
-      const cnFields: string[] = catInfo.cnFields || [];
+      const fields: string[] = catInfo.info?.fields || [];
+      const cnFields: string[] = catInfo.info?.cnFields || [];
       displayFields.value = fields
-        .filter((f: string) => f !== 'brand' && f !== 'model' && !f.endsWith('_power'))
-        .map((f: string, i: number) => {
+        .filter((f: string) => f !== 'brand' && f !== 'model')
+        .map((f: string) => {
           const fieldIndex = fields.indexOf(f);
-          return { key: f, label: cnFields[fieldIndex] || f };
+          return { key: f, label: cnFields[fieldIndex] || f, type: f === 'image' ? 'image' : undefined };
         });
     }
   }
 };
 
 const loadData = async () => {
-  const result = await dbApi.getList(category.value);
+  const result = await dbApi.getInfoList(category.value);
   if (result.success && result.data) {
     allData.value = result.data;
     const modelMap = new Map<string, string[]>();
@@ -168,7 +179,7 @@ const handleBrandChange = (index: number, brand: string) => {
 };
 
 const handleModelChange = (index: number, model: string) => {
-  products.value[index] = { ...products.value[index], model };
+  products.value[index] = { brand: products.value[index]?.brand || '', model };
 };
 
 const addProduct = () => {
@@ -379,6 +390,27 @@ onMounted(() => {
   width: 120px;
   color: #666;
   font-weight: 500;
+}
+
+.product-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.compare-image {
+  max-width: 120px;
+  max-height: 80px;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid #eee;
 }
 
 .power-btn-wrap {

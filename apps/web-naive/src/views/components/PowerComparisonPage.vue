@@ -2,9 +2,7 @@
   <div class="power-comparison-page">
     <header class="navbar">
       <div class="container">
-        <div class="logo">
-          <h1>TechCompare</h1>
-        </div>
+        <div class="logo"><h1>TechCompare</h1></div>
         <nav class="nav-links">
           <a href="/">首页</a>
           <a href="/power-consumption" :class="{ active: category === 'phones' }">旗舰手机功耗</a>
@@ -19,7 +17,6 @@
 
     <main class="container">
       <h2 class="page-title">{{ pageTitle }}</h2>
-
       <section class="product-table-section">
         <h3>选择对比产品</h3>
         <div class="product-table">
@@ -67,27 +64,7 @@
 
     <footer class="footer">
       <div class="container">
-        <div class="footer-content">
-          <div class="footer-info">
-            <h3>TechCompare</h3>
-            <p>专业的电子产品功耗对比平台</p>
-          </div>
-          <div class="footer-links">
-            <h4>快速导航</h4>
-            <ul>
-              <li><a href="/">首页</a></li>
-              <li><a href="/power-consumption">旗舰手机功耗</a></li>
-              <li><a href="/mid-low-phone-power">中低端手机功耗</a></li>
-              <li><a href="/mouse-power">鼠标功耗</a></li>
-              <li><a href="/keyboard-power">键盘功耗</a></li>
-              <li><a href="/remote-control-power">遥控器功耗</a></li>
-              <li><a href="/config">数据管理</a></li>
-            </ul>
-          </div>
-        </div>
-        <div class="footer-bottom">
-          <p>&copy; {{ new Date().getFullYear() }} TechCompare. 保留所有权利。</p>
-        </div>
+        <p>&copy; {{ new Date().getFullYear() }} TechCompare. 保留所有权利。</p>
       </div>
     </footer>
   </div>
@@ -110,11 +87,7 @@ const props = defineProps<{
   pageTitle: string;
   categoryName: string;
   chartConfigs: ChartConfigItem[];
-  displayColumns: Array<{
-    key: string;
-    label: string;
-    suffix?: string;
-  }>;
+  displayColumns: Array<{ key: string; label: string; suffix?: string }>;
 }>();
 
 const allProducts = ref<Product[]>([]);
@@ -127,7 +100,7 @@ const selectedProducts = computed(() => {
 
 const loadProducts = async () => {
   loading.value = true;
-  const result = await dbApi.getList(props.category);
+  const result = await dbApi.getPowerList(props.category);
   if (result.success && result.data) {
     allProducts.value = result.data;
   }
@@ -146,116 +119,62 @@ const handleProductToggle = (product: Product) => {
 const createCharts = () => {
   props.chartConfigs.forEach(config => {
     const chartDom = document.getElementById(`chart-${config.scenario}`);
-    if (chartDom) {
-      const chart = echarts.init(chartDom);
-      
-      const isSingleField = config.fields.length === 1;
-      
-      if (isSingleField) {
+    if (!chartDom) return;
+    const chart = echarts.init(chartDom);
+    const isHorizontal = config.chartType === 'barH';
+    const isSingleField = config.fields.length === 1;
+    const productNames = selectedProducts.value.map(p => `${p.brand} ${p.model}`);
+
+    if (isSingleField) {
+      const data = selectedProducts.value.map(p => {
         const field = config.fields[0];
-        const data = selectedProducts.value.map(product => ({
-          name: `${product.brand} ${product.model}`,
-          value: product[field] || 0
-        }));
-        
-        const option = {
-          title: {
-            text: config.scenario,
-            left: 'center'
-          },
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: {
-              type: 'shadow'
-            }
-          },
-          grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '15%',
-            top: '15%',
-            containLabel: true
-          },
-          xAxis: {
-            type: 'category',
-            data: data.map(item => item.name),
-            axisLabel: {
-              rotate: 45
-            }
-          },
-          yAxis: {
-            type: 'value',
-            name: '功耗 (mW)',
-            min: 0
-          },
-          series: [{
-            name: config.labels[0],
-            type: config.chartType,
-            data: data.map(item => item.value),
-            smooth: true,
-            emphasis: {
-              focus: 'series'
-            }
-          }]
-        };
-        
-        chart.setOption(option);
-      } else {
-        const series = selectedProducts.value.map(product => {
-          const seriesData = config.fields.map(field => product[field] || 0);
-          return {
-            name: `${product.brand} ${product.model}`,
-            type: config.chartType,
-            data: seriesData,
-            smooth: true,
-            emphasis: {
-              focus: 'series'
-            }
-          };
-        });
-
-        const option = {
-          title: {
-            text: config.scenario,
-            left: 'center'
-          },
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: {
-              type: 'shadow'
-            }
-          },
-          legend: {
-            data: selectedProducts.value.map(product => `${product.brand} ${product.model}`),
-            bottom: 0
-          },
-          grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '15%',
-            top: '15%',
-            containLabel: true
-          },
-          xAxis: {
-            type: 'category',
-            data: config.labels,
-            axisLabel: {
-              rotate: 45
-            }
-          },
-          yAxis: {
-            type: 'value',
-            name: '功耗 (mW)',
-            min: 0
-          },
-          series
-        };
-
-        chart.setOption(option);
-      }
-      
-      window.addEventListener('resize', () => {
-        chart.resize();
+        const val = field ? p[field] : 0;
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+      });
+      chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: productNames },
+        yAxis: { type: 'value', name: 'mW' },
+        series: [{
+          name: config.labels[0],
+          type: 'line',
+          data,
+          smooth: true,
+          itemStyle: { color: '#667eea' },
+          areaStyle: { color: 'rgba(102,126,234,0.15)' },
+        }],
+      });
+    } else if (isHorizontal) {
+      const series = config.fields.map((field, i) => ({
+        name: config.labels[i],
+        type: 'bar' as const,
+        data: selectedProducts.value.map(p => {
+          const val = p[field];
+          return typeof val === 'number' ? val : parseFloat(val) || 0;
+        }),
+      }));
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: config.labels },
+        yAxis: { type: 'category', data: productNames },
+        xAxis: { type: 'value', name: 'mW' },
+        series,
+      });
+    } else {
+      const series = config.fields.map((field, i) => ({
+        name: config.labels[i],
+        type: 'bar' as const,
+        data: selectedProducts.value.map(p => {
+          const val = p[field];
+          return typeof val === 'number' ? val : parseFloat(val) || 0;
+        }),
+      }));
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: config.labels },
+        xAxis: { type: 'category', data: productNames },
+        yAxis: { type: 'value', name: 'mW' },
+        series,
       });
     }
   });
@@ -263,9 +182,7 @@ const createCharts = () => {
 
 watch(selectedProducts, () => {
   if (selectedProducts.value.length > 0) {
-    setTimeout(() => {
-      createCharts();
-    }, 100);
+    setTimeout(createCharts, 100);
   }
 }, { deep: true });
 
@@ -277,74 +194,74 @@ onMounted(() => {
 <style scoped>
 .power-comparison-page {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  display: flex;
+  flex-direction: column;
 }
 
 .navbar {
-  background-color: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 0 24px;
 }
 
 .container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 24px;
 }
 
 .navbar .container {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  height: 80px;
+  justify-content: space-between;
+  height: 60px;
 }
 
 .logo h1 {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #333;
+  font-size: 1.3rem;
   margin: 0;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .nav-links {
   display: flex;
   gap: 20px;
-  flex-wrap: wrap;
 }
 
 .nav-links a {
   text-decoration: none;
   color: #666;
   font-size: 0.9rem;
-  font-weight: 500;
-  transition: color 0.3s;
-  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s;
 }
 
 .nav-links a:hover,
 .nav-links a.active {
-  color: #007bff;
+  color: #667eea;
+  background: #f0f2ff;
 }
 
 .page-title {
-  font-size: 2rem;
-  margin: 40px 0 30px;
+  font-size: 1.8rem;
   color: #333;
+  margin: 32px 0 24px;
 }
 
 .product-table-section {
-  background-color: white;
-  border-radius: 8px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .product-table-section h3 {
-  font-size: 1.5rem;
-  margin-bottom: 20px;
+  font-size: 1.2rem;
+  margin: 0 0 20px;
   color: #333;
 }
 
@@ -352,153 +269,83 @@ onMounted(() => {
   overflow-x: auto;
 }
 
-table {
+.product-table table {
   width: 100%;
   border-collapse: collapse;
 }
 
-th, td {
-  padding: 12px 15px;
+.product-table th,
+.product-table td {
+  padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid #eee;
+  color: #333;
 }
 
-th {
-  background-color: #f9f9f9;
+.product-table th {
+  background: #f8f9fa;
   font-weight: 600;
   color: #333;
-  white-space: nowrap;
 }
 
-th:first-child, td:first-child {
-  width: 80px;
-  text-align: center;
-}
-
-td {
-  color: #333;
-}
-
-tr:hover {
-  background-color: #f5f5f5;
-}
-
-.loading-cell, .empty-cell {
+.loading-cell,
+.empty-cell {
   text-align: center;
   padding: 40px;
   color: #999;
 }
 
 .charts-section {
-  background-color: white;
-  border-radius: 8px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .charts-section h3 {
-  font-size: 1.5rem;
-  margin-bottom: 20px;
+  font-size: 1.2rem;
+  margin: 0 0 20px;
   color: #333;
 }
 
 .charts-container {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-}
-
-.chart {
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
 }
 
 .chart h4 {
-  font-size: 1.2rem;
-  margin-bottom: 15px;
-  color: #333;
-  text-align: center;
+  font-size: 1rem;
+  margin: 0 0 12px;
+  color: #555;
 }
 
 .chart-wrapper {
   width: 100%;
-  height: 400px;
+  height: 300px;
 }
 
 .footer {
-  background-color: #333;
-  color: white;
-  padding: 40px 0;
-  margin-top: 60px;
-}
-
-.footer-content {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 30px;
-}
-
-.footer-info h3 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-}
-
-.footer-info p {
-  color: #ccc;
-}
-
-.footer-links h4 {
-  font-size: 1.1rem;
-  margin-bottom: 15px;
-}
-
-.footer-links ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.footer-links li {
-  margin-bottom: 10px;
-}
-
-.footer-links a {
-  color: #ccc;
-  text-decoration: none;
-  transition: color 0.3s;
-}
-
-.footer-links a:hover {
-  color: white;
-}
-
-.footer-bottom {
-  border-top: 1px solid #444;
-  padding-top: 20px;
+  margin-top: auto;
+  background: #f8f9fa;
+  padding: 20px 0;
   text-align: center;
-  color: #ccc;
+}
+
+.footer p {
+  color: #999;
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 768px) {
-  .navbar .container {
-    flex-direction: column;
-    height: auto;
-    padding: 20px 0;
-  }
-
   .nav-links {
-    margin-top: 15px;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-
-  .chart {
-    height: 300px;
-  }
-
-  .footer-content {
-    flex-direction: column;
-    gap: 30px;
+  .charts-container {
+    grid-template-columns: 1fr;
   }
 }
 </style>

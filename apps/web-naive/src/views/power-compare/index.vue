@@ -42,18 +42,6 @@
                   {{ product.model || '-' }}
                 </td>
               </tr>
-              <tr>
-                <td class="row-label-col">芯片型号</td>
-                <td
-                  v-for="product in allProducts"
-                  :key="'chip-' + product.id"
-                  class="product-col"
-                  :class="{ selected: selectedProductIds.includes(product.id) }"
-                  @click="handleProductToggle(product)"
-                >
-                  /
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -89,10 +77,8 @@ const router = useRouter();
 const route = useRoute();
 
 const category = computed(() => route.params.category as string);
-
 const categoryName = ref('');
 const chartConfigs = ref<ChartConfigItem[]>([]);
-
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
@@ -107,14 +93,14 @@ const loadCategoryConfig = async () => {
     const catInfo = result.data.find((c: any) => c.key === category.value);
     if (catInfo) {
       categoryName.value = catInfo.name;
-      chartConfigs.value = catInfo.chartConfig || [];
+      chartConfigs.value = catInfo.power?.chartConfig || [];
     }
   }
 };
 
 const loadProducts = async () => {
   loading.value = true;
-  const result = await dbApi.getList(category.value);
+  const result = await dbApi.getPowerList(category.value);
   if (result.success && result.data) {
     allProducts.value = result.data;
     initSelectedFromQuery();
@@ -130,9 +116,7 @@ const initSelectedFromQuery = () => {
     for (const pair of pairs) {
       const [brand, model] = pair.split('::');
       const found = allProducts.value.find(p => p.brand === brand && p.model === model);
-      if (found) {
-        ids.push(found.id);
-      }
+      if (found) ids.push(found.id);
     }
     selectedProductIds.value = ids;
   }
@@ -151,71 +135,67 @@ const createCharts = () => {
   chartConfigs.value.forEach(config => {
     const chartDom = document.getElementById(`chart-${config.scenario}`);
     if (!chartDom) return;
-
     const chart = echarts.init(chartDom);
     const isHorizontal = config.chartType === 'barH';
     const isSingleField = config.fields.length === 1;
 
+    const productNames = selectedProducts.value.map(p => `${p.brand} ${p.model}`);
+
     if (isSingleField) {
-      const field = config.fields[0];
-      const data = selectedProducts.value.map(p => ({
-        name: `${p.brand} ${p.model}`,
-        value: p[field] || 0,
+      const data = selectedProducts.value.map(p => {
+        const field = config.fields[0];
+        const val = field ? p[field] : 0;
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+      });
+
+      chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: productNames },
+        yAxis: { type: 'value', name: 'mW' },
+        series: [{
+          name: config.labels[0],
+          type: 'line',
+          data,
+          smooth: true,
+          itemStyle: { color: '#667eea' },
+          areaStyle: { color: 'rgba(102,126,234,0.15)' },
+        }],
+      });
+    } else if (isHorizontal) {
+      const series = config.fields.map((field, i) => ({
+        name: config.labels[i],
+        type: 'bar' as const,
+        data: selectedProducts.value.map(p => {
+          const val = p[field];
+          return typeof val === 'number' ? val : parseFloat(val) || 0;
+        }),
       }));
 
-      if (isHorizontal) {
-        chart.setOption({
-          title: { text: config.scenario, left: 'center' },
-          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-          grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
-          xAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-          yAxis: { type: 'category', data: data.map(d => d.name) },
-          series: [{ name: config.labels[0], type: 'bar', data: data.map(d => d.value) }],
-        });
-      } else {
-        const seriesType = config.chartType === 'line' ? 'line' : 'bar';
-        chart.setOption({
-          title: { text: config.scenario, left: 'center' },
-          tooltip: { trigger: 'axis', axisPointer: { type: seriesType === 'line' ? 'line' : 'shadow' } },
-          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
-          xAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { rotate: 45 } },
-          yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-          series: [{ name: config.labels[0], type: seriesType, data: data.map(d => d.value), smooth: seriesType === 'line' }],
-        });
-      }
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: config.labels },
+        yAxis: { type: 'category', data: productNames },
+        xAxis: { type: 'value', name: 'mW' },
+        series,
+      });
     } else {
-      const seriesType = isHorizontal ? 'bar' : (config.chartType === 'line' ? 'line' : 'bar');
-      const series = selectedProducts.value.map(p => ({
-        name: `${p.brand} ${p.model}`,
-        type: seriesType,
-        data: config.fields.map(f => p[f] || 0),
-        smooth: seriesType === 'line',
+      const series = config.fields.map((field, i) => ({
+        name: config.labels[i],
+        type: 'bar' as const,
+        data: selectedProducts.value.map(p => {
+          const val = p[field];
+          return typeof val === 'number' ? val : parseFloat(val) || 0;
+        }),
       }));
 
-      if (isHorizontal) {
-        chart.setOption({
-          title: { text: config.scenario, left: 'center' },
-          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-          legend: { data: selectedProducts.value.map(p => `${p.brand} ${p.model}`), bottom: 0 },
-          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
-          xAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-          yAxis: { type: 'category', data: config.labels },
-          series,
-        });
-      } else {
-        chart.setOption({
-          title: { text: config.scenario, left: 'center' },
-          tooltip: { trigger: 'axis', axisPointer: { type: seriesType === 'line' ? 'line' : 'shadow' } },
-          legend: { data: selectedProducts.value.map(p => `${p.brand} ${p.model}`), bottom: 0 },
-          grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
-          xAxis: { type: 'category', data: config.labels, axisLabel: { rotate: 45 } },
-          yAxis: { type: 'value', name: '功耗 (mW)', min: 0 },
-          series,
-        });
-      }
+      chart.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        legend: { data: config.labels },
+        xAxis: { type: 'category', data: productNames },
+        yAxis: { type: 'value', name: 'mW' },
+        series,
+      });
     }
-
-    window.addEventListener('resize', () => chart.resize());
   });
 };
 
@@ -265,11 +245,11 @@ onMounted(() => {
 .back-btn {
   background: none;
   border: 1px solid #ddd;
-  padding: 6px 16px;
+  padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
+  color: #666;
   font-size: 0.9rem;
-  color: #333;
   transition: all 0.3s;
 }
 
@@ -278,8 +258,7 @@ onMounted(() => {
   color: #667eea;
 }
 
-.product-table-section,
-.charts-section {
+.product-table-section {
   background: white;
   border-radius: 12px;
   padding: 24px;
@@ -287,8 +266,7 @@ onMounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.product-table-section h3,
-.charts-section h3 {
+.product-table-section h3 {
   font-size: 1.2rem;
   margin: 0 0 20px;
   color: #333;
@@ -297,7 +275,7 @@ onMounted(() => {
 .loading-state {
   text-align: center;
   padding: 40px;
-  color: #333;
+  color: #999;
 }
 
 .product-select-table-wrap {
@@ -307,76 +285,88 @@ onMounted(() => {
 .product-select-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
 }
 
 .product-select-table th,
 .product-select-table td {
   padding: 12px 16px;
   text-align: center;
-  border: 1px solid #e8e8e8;
+  border-bottom: 1px solid #eee;
   color: #333;
-  font-size: 0.9rem;
+}
+
+.product-select-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #333;
 }
 
 .row-label-col {
   width: 100px;
-  background: #f0f2ff;
-  font-weight: 600;
-  color: #333;
-  text-align: center;
-  white-space: nowrap;
+  text-align: left;
+  font-weight: 500;
+  color: #666;
 }
 
 .product-col {
   cursor: pointer;
-  transition: all 0.2s;
-  color: #333;
-  user-select: none;
+  transition: background 0.2s;
+  min-width: 120px;
 }
 
 .product-col:hover {
-  background-color: #f0f2ff;
+  background: #f0f2ff;
 }
 
 .product-col.selected {
-  background-color: #e8ebff;
-  font-weight: 500;
+  background: #e8ebff;
 }
 
 .product-col-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
+  justify-content: center;
 }
 
 .check-indicator {
   font-size: 1.1rem;
-  line-height: 1;
+}
+
+.charts-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.charts-section h3 {
+  font-size: 1.2rem;
+  margin: 0 0 20px;
+  color: #333;
 }
 
 .charts-container {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-}
-
-.chart {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
 }
 
 .chart h4 {
-  font-size: 1.1rem;
-  margin: 0 0 16px;
-  color: #333;
-  text-align: center;
+  font-size: 1rem;
+  margin: 0 0 12px;
+  color: #555;
 }
 
 .chart-wrapper {
   width: 100%;
-  height: 400px;
+  height: 300px;
+}
+
+@media (max-width: 768px) {
+  .charts-container {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
