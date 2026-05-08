@@ -55,7 +55,7 @@ function cnToEnField(cnName) {
     '电池容量': 'battery_capacity', '视频播放功耗': 'video_power', '游戏功耗': 'game_power',
     '待机功耗': 'standby_power', '浏览网页功耗': 'browser_power', '睡眠功耗': 'sleep_power',
     '休眠功耗': 'dormancy_power', '使用功耗': 'usage_power', '功耗对比场景': 'power_scenario',
-    '图表类型': 'chart_type', '厂家': 'manufacturer', '单位': 'unit',
+    '图表类型': 'chart_type', '单位': 'unit',
   };
   if (pinyinMap[cnName]) return pinyinMap[cnName];
   return cnName
@@ -184,10 +184,34 @@ function extractImagesFromXlsx(xlsxPath) {
   }
 }
 
+async function syncImageMapToDb(categoryKey, imageMap) {
+  if (!imageMap || Object.keys(imageMap).length === 0) return;
+  for (const [dispimgId, imagePath] of Object.entries(imageMap)) {
+    await pool.query(
+      `INSERT INTO image_mapping (category_key, dispimg_id, image_path) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE image_path = VALUES(image_path)`,
+      [categoryKey, dispimgId, imagePath]
+    );
+  }
+}
+
+async function getImageMapFromDb(categoryKey) {
+  const [rows] = await pool.query(
+    'SELECT dispimg_id, image_path FROM image_mapping WHERE category_key = ?',
+    [categoryKey]
+  );
+  const map = {};
+  for (const row of rows) {
+    map[row.dispimg_id] = row.image_path;
+  }
+  return map;
+}
+
 async function getMetaFromDb() {
   const [sheets] = await pool.query('SELECT * FROM sheet_meta ORDER BY category_key, sheet_type');
   const [fields] = await pool.query('SELECT * FROM field_meta ORDER BY category_key, sheet_type, display_order');
   const [charts] = await pool.query('SELECT * FROM chart_config ORDER BY category_key, scenario_order');
+  const [headerRowsDb] = await pool.query('SELECT * FROM header_rows ORDER BY category_key, row_index, col_index');
 
   const result = {};
   for (const s of sheets) {
@@ -224,18 +248,27 @@ async function getMetaFromDb() {
         return col;
       });
 
+    const sheetHeaderRows = headerRowsDb
+      .filter(h => h.category_key === s.category_key && h.sheet_type === s.sheet_type)
+      .reduce((acc, h) => {
+        if (!acc[h.row_index]) acc[h.row_index] = [];
+        acc[h.row_index].push({ label: h.field_label, value: h.field_value });
+        return acc;
+      }, []);
+
     result[s.category_key][s.sheet_type] = {
       table: s.table_name,
       fields: ['brand', 'model', ...sheetFields.filter(f => f.en_name !== 'brand' && f.en_name !== 'model').map(f => f.en_name)],
       cnFields: ['品牌', '型号', ...sheetFields.filter(f => f.en_name !== 'brand' && f.en_name !== 'model').map(f => f.cn_name)],
       displayColumns,
       chartConfig: sheetCharts,
+      headerRows: Object.values(sheetHeaderRows),
     };
   }
   return result;
 }
 
-async function ensureTable(tableName, fieldDefs) {
+async function createTable(tableName, fieldDefs) {
   const nonFixedFields = fieldDefs.filter(f => !FIXED_COLUMNS.includes(f.en_name));
   const columnDefs = nonFixedFields.map(f => {
     if (f.en_name === 'brand' || f.en_name === 'model') {
@@ -245,9 +278,9 @@ async function ensureTable(tableName, fieldDefs) {
       return `\`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`;
     }
     if (f.field_type === 'image') {
-      return `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
+      return `\`${f.en_name}\` TEXT COMMENT '${f.cn_name}'`;
     }
-    return `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
+    return `\`${f.en_name}\` TEXT COMMENT '${f.cn_name}'`;
   });
 
   const allColumns = [
@@ -261,39 +294,8 @@ async function ensureTable(tableName, fieldDefs) {
   ];
 
   await pool.query(
-    `CREATE TABLE IF NOT EXISTS \`${tableName}\` (${allColumns.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    `CREATE TABLE \`${tableName}\` (${allColumns.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC`
   );
-
-  const [existingCols] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
-  const existingNames = new Set(existingCols.map(c => c.Field));
-
-  for (const f of nonFixedFields) {
-    if (f.en_name === 'brand' || f.en_name === 'model') continue;
-    if (!existingNames.has(f.en_name)) {
-      let colDef;
-      if (f.field_type === 'number') {
-        colDef = `\`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`;
-      } else if (f.field_type === 'image') {
-        colDef = `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
-      } else {
-        colDef = `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
-      }
-      await pool.query(`ALTER TABLE \`${tableName}\` ADD COLUMN ${colDef}`);
-      console.log(`已添加列 ${tableName}.${f.en_name}`);
-    }
-  }
-
-  const [currentCols] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
-  for (const f of nonFixedFields) {
-    if (f.en_name === 'brand' || f.en_name === 'model') continue;
-    if (f.field_type === 'number') {
-      const col = currentCols.find(c => c.Field === f.en_name);
-      if (col && (col.Type === 'int' || col.Type.startsWith('int('))) {
-        await pool.query(`ALTER TABLE \`${tableName}\` MODIFY COLUMN \`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`);
-        console.log(`已修改列 ${tableName}.${f.en_name} 从 INT 到 FLOAT`);
-      }
-    }
-  }
 }
 
 async function initDatabase() {
@@ -346,8 +348,31 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS image_mapping (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      category_key VARCHAR(100) NOT NULL,
+      dispimg_id VARCHAR(200) NOT NULL,
+      image_path TEXT NOT NULL,
+      UNIQUE KEY uk_cat_dispimg (category_key, dispimg_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS header_rows (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      category_key VARCHAR(100) NOT NULL,
+      sheet_type ENUM('info','power') NOT NULL,
+      row_index INT NOT NULL,
+      col_index INT NOT NULL,
+      field_label VARCHAR(200) NOT NULL,
+      field_value TEXT,
+      UNIQUE KEY uk_cat_row_col (category_key, sheet_type, row_index, col_index)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   conn.release();
-  console.log('数据库初始化完成（含元数据表）');
+  console.log('数据库初始化完成（含元数据表、图片映射表、表头行表）');
 }
 
 function detectFieldTypes(records) {
@@ -414,14 +439,49 @@ function mergeFieldTypesWithAllNames(fieldTypes, allFieldNames) {
   const merged = { ...fieldTypes };
   for (const fieldName of allFieldNames) {
     if (!merged[fieldName]) {
-      if (fieldName === '品牌' || fieldName === '型号') {
-        merged[fieldName] = 'text';
-      } else {
-        merged[fieldName] = 'text';
-      }
+      merged[fieldName] = 'text';
     }
   }
   return merged;
+}
+
+function extractHeaderRows(rawRows, maxRows = 3) {
+  const headerRows = [];
+  const maxCols = Math.max(...rawRows.map(row => (row && row.length) || 0));
+  const rowCount = Math.min(rawRows.length, maxRows);
+  for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
+    const row = rawRows[rowIdx];
+    if (!row) continue;
+    const rowData = [];
+    for (let colIdx = 0; colIdx < maxCols; colIdx++) {
+      const label = colIdx === 0 ? (row[0] ? String(row[0]).trim() : '') : '';
+      const value = colIdx > 0 && colIdx < row.length ? (row[colIdx] != null ? String(row[colIdx]).trim() : '') : '';
+      rowData.push({ label, value });
+    }
+    if (rowData.some(d => d.label || d.value)) {
+      headerRows.push(rowData);
+    }
+  }
+  return headerRows;
+}
+
+async function syncHeaderRowsToDb(categoryKey, sheetType, headerRows) {
+  await pool.query(
+    'DELETE FROM header_rows WHERE category_key = ? AND sheet_type = ?',
+    [categoryKey, sheetType]
+  );
+  for (let rowIdx = 0; rowIdx < headerRows.length; rowIdx++) {
+    const row = headerRows[rowIdx];
+    for (let colIdx = 0; colIdx < row.length; colIdx++) {
+      if (row[colIdx].label || row[colIdx].value) {
+        await pool.query(
+          `INSERT INTO header_rows (category_key, sheet_type, row_index, col_index, field_label, field_value)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [categoryKey, sheetType, rowIdx, colIdx, row[colIdx].label, row[colIdx].value]
+        );
+      }
+    }
+  }
 }
 
 async function syncMetaToDb(categoryKey, categoryName, sheetName, sheetType, tableName, fieldTypes, records) {
@@ -432,6 +492,11 @@ async function syncMetaToDb(categoryKey, categoryName, sheetName, sheetType, tab
     [categoryKey, categoryName, sheetName, sheetType, tableName]
   );
 
+  await pool.query(
+    'DELETE FROM field_meta WHERE category_key = ? AND sheet_type = ?',
+    [categoryKey, sheetType]
+  );
+
   const cnFieldNames = Object.keys(fieldTypes);
   let order = 0;
   for (const cnName of cnFieldNames) {
@@ -439,24 +504,9 @@ async function syncMetaToDb(categoryKey, categoryName, sheetName, sheetType, tab
     const fType = cnName === '品牌' || cnName === '型号' ? 'text' : fieldTypes[cnName];
     await pool.query(
       `INSERT INTO field_meta (category_key, sheet_type, en_name, cn_name, field_type, display_order)
-       VALUES (?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE cn_name = VALUES(cn_name), field_type = VALUES(field_type), display_order = VALUES(display_order)`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [categoryKey, sheetType, enName, cnName, fType, order++]
     );
-  }
-
-  const [existingFields] = await pool.query(
-    'SELECT en_name FROM field_meta WHERE category_key = ? AND sheet_type = ?',
-    [categoryKey, sheetType]
-  );
-  const currentFields = new Set(cnFieldNames.map(cn => cnToEnField(cn)));
-  for (const ef of existingFields) {
-    if (!currentFields.has(ef.en_name) && ef.en_name !== 'brand' && ef.en_name !== 'model') {
-      await pool.query(
-        'DELETE FROM field_meta WHERE category_key = ? AND sheet_type = ? AND en_name = ?',
-        [categoryKey, sheetType, ef.en_name]
-      );
-    }
   }
 }
 
@@ -511,7 +561,6 @@ async function importSheetData(tableName, records, fieldTypes, imageMap) {
 
   const insertCols = ['brand', 'model', ...nonKeyEnNames];
   const placeholders = insertCols.map(() => '?').join(', ');
-  const updateClauses = nonKeyEnNames.map(en => `\`${en}\` = VALUES(\`${en}\`)`).join(', ');
 
   let successCount = 0;
   let failCount = 0;
@@ -546,7 +595,7 @@ async function importSheetData(tableName, records, fieldTypes, imageMap) {
       }
 
       await pool.query(
-        `INSERT INTO \`${tableName}\` (${insertCols.map(c => '`' + c + '`').join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClauses}`,
+        `INSERT INTO \`${tableName}\` (${insertCols.map(c => '`' + c + '`').join(', ')}) VALUES (${placeholders})`,
         values
       );
       successCount++;
@@ -612,7 +661,7 @@ app.get('/api/:category/power', async (req, res) => {
       return res.status(404).json({ success: false, message: '类别不存在' });
     }
     const [rows] = await pool.query(`SELECT * FROM \`${config.power.table}\` ORDER BY brand, model`);
-    res.json({ success: true, data: rows });
+    res.json({ success: true, data: rows, headerRows: config.power.headerRows || [] });
   } catch (error) {
     console.error('查询功耗数据失败:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -635,7 +684,7 @@ app.get('/api/all-data', async (req, res) => {
       result[key] = {
         name: config.name,
         info: config.info ? { table: config.info.table, displayColumns: config.info.displayColumns, data: infoRows } : { table: '', displayColumns: [], data: [] },
-        power: config.power ? { table: config.power.table, displayColumns: config.power.displayColumns, chartConfig: config.power.chartConfig, data: powerRows } : { table: '', displayColumns: [], chartConfig: [], data: [] },
+        power: config.power ? { table: config.power.table, displayColumns: config.power.displayColumns, chartConfig: config.power.chartConfig, data: powerRows, headerRows: config.power.headerRows || [] } : { table: '', displayColumns: [], chartConfig: [], data: [], headerRows: [] },
       };
     }
     res.json({ success: true, data: result });
@@ -734,35 +783,39 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
       sheetInfoMap[categoryKey].sheets[sheetName] = parsed;
     }
 
+    const existingMeta = await getMetaFromDb();
+
+    for (const [categoryKey, catInfo] of Object.entries(sheetInfoMap)) {
+      if (existingMeta[categoryKey]) {
+        if (existingMeta[categoryKey].info) {
+          try { await pool.query(`DROP TABLE IF EXISTS \`${existingMeta[categoryKey].info.table}\``); } catch (_) {}
+        }
+        if (existingMeta[categoryKey].power) {
+          try { await pool.query(`DROP TABLE IF EXISTS \`${existingMeta[categoryKey].power.table}\``); } catch (_) {}
+        }
+      }
+      await pool.query('DELETE FROM sheet_meta WHERE category_key = ?', [categoryKey]);
+      await pool.query('DELETE FROM field_meta WHERE category_key = ?', [categoryKey]);
+      await pool.query('DELETE FROM chart_config WHERE category_key = ?', [categoryKey]);
+      await pool.query('DELETE FROM header_rows WHERE category_key = ?', [categoryKey]);
+      await pool.query('DELETE FROM image_mapping WHERE category_key = ?', [categoryKey]);
+    }
+
     const results = {};
     let totalSuccess = 0;
     let totalFail = 0;
     let processedSheets = 0;
 
     for (const [categoryKey, catInfo] of Object.entries(sheetInfoMap)) {
+      await syncImageMapToDb(categoryKey, imageMap);
+
       for (const [sheetName, sheetParsed] of Object.entries(catInfo.sheets)) {
         const worksheet = workbook.Sheets[sheetName];
         const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
         const records = parseTransposedSheet(rawRows);
-        if (records.length === 0) {
-          const allFieldNames = extractAllFieldNames(rawRows);
-          if (allFieldNames.length > 0) {
-            const fieldTypes = mergeFieldTypesWithAllNames({}, allFieldNames);
-            const tableName = `${categoryKey}_${sheetParsed.type}`;
-            const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
-              en_name: cnToEnField(cnName),
-              cn_name: cnName,
-              field_type: fType,
-              display_order: idx,
-            }));
-            await ensureTable(tableName, fieldDefs);
-            await syncMetaToDb(categoryKey, catInfo.name, sheetName, sheetParsed.type, tableName, fieldTypes, records);
-          }
-          continue;
-        }
 
         const allFieldNames = extractAllFieldNames(rawRows);
-        let fieldTypes = detectFieldTypes(records);
+        let fieldTypes = records.length > 0 ? detectFieldTypes(records) : {};
         fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
         const tableName = `${categoryKey}_${sheetParsed.type}`;
 
@@ -773,19 +826,26 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
           display_order: idx,
         }));
 
-        await ensureTable(tableName, fieldDefs);
+        await createTable(tableName, fieldDefs);
         await syncMetaToDb(categoryKey, catInfo.name, sheetName, sheetParsed.type, tableName, fieldTypes, records);
 
-        const importResult = await importSheetData(tableName, records, fieldTypes, imageMap);
+        const headerRows = extractHeaderRows(rawRows, 3);
+        await syncHeaderRowsToDb(categoryKey, sheetParsed.type, headerRows);
 
-        results[`${categoryKey}_${sheetParsed.type}`] = {
-          sheetName,
-          categoryName: catInfo.name + (sheetParsed.type === 'info' ? '产品信息' : '功耗数据'),
-          successCount: importResult.success,
-          failCount: importResult.fail,
-        };
-        totalSuccess += importResult.success;
-        totalFail += importResult.fail;
+        if (records.length > 0) {
+          const dbImageMap = await getImageMapFromDb(categoryKey);
+          const mergedImageMap = { ...imageMap, ...dbImageMap };
+          const importResult = await importSheetData(tableName, records, fieldTypes, mergedImageMap);
+
+          results[`${categoryKey}_${sheetParsed.type}`] = {
+            sheetName,
+            categoryName: catInfo.name + (sheetParsed.type === 'info' ? '产品信息' : '功耗数据'),
+            successCount: importResult.success,
+            failCount: importResult.fail,
+          };
+          totalSuccess += importResult.success;
+          totalFail += importResult.fail;
+        }
         processedSheets++;
       }
     }
@@ -970,16 +1030,16 @@ async function loadFromTemplateOnFirstRun() {
   if (!fs.existsSync(templatePath)) return;
 
   console.log('首次运行，从模板加载数据...');
-  const fileBuffer = fs.readFileSync(templatePath);
   const imageMap = extractImagesFromXlsx(templatePath);
   const workbook = xlsx.readFile(templatePath);
 
-  const fakeReq = { file: { path: templatePath } };
   for (const sheetName of workbook.SheetNames) {
     const parsed = parseSheetType(sheetName);
     if (parsed.type === 'config') continue;
 
     const categoryKey = categoryNameToKey(parsed.categoryName);
+    await syncImageMapToDb(categoryKey, imageMap);
+
     const worksheet = workbook.Sheets[sheetName];
     const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
     const records = parseTransposedSheet(rawRows);
@@ -993,9 +1053,15 @@ async function loadFromTemplateOnFirstRun() {
       en_name: cnToEnField(cnName), cn_name: cnName, field_type: fType, display_order: idx,
     }));
 
-    await ensureTable(tableName, fieldDefs);
+    await createTable(tableName, fieldDefs);
     await syncMetaToDb(categoryKey, parsed.categoryName, sheetName, parsed.type, tableName, fieldTypes, records);
-    await importSheetData(tableName, records, fieldTypes, imageMap);
+
+    const headerRows = extractHeaderRows(rawRows, 3);
+    await syncHeaderRowsToDb(categoryKey, parsed.type, headerRows);
+
+    const dbImageMap = await getImageMapFromDb(categoryKey);
+    const mergedImageMap = { ...imageMap, ...dbImageMap };
+    await importSheetData(tableName, records, fieldTypes, mergedImageMap);
     console.log(`已从模板加载 ${parsed.categoryName} ${parsed.type} 数据`);
   }
 

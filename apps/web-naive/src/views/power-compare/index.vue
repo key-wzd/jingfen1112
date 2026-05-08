@@ -13,42 +13,46 @@
         <div v-else class="product-select-table-wrap">
           <table class="product-select-table">
             <thead>
-              <tr>
-                <th class="row-label-col">品牌</th>
-                <th
-                  v-for="product in allProducts"
-                  :key="product.id"
-                  class="product-col"
-                  :class="{ selected: selectedProductIds.includes(product.id) }"
-                  @click="handleProductToggle(product)"
-                >
-                  {{ product.brand }}
-                </th>
-              </tr>
-              <tr>
-                <th class="row-label-col">型号</th>
-                <th
-                  v-for="product in allProducts"
-                  :key="product.id"
-                  class="product-col"
-                  :class="{ selected: selectedProductIds.includes(product.id) }"
-                  @click="handleProductToggle(product)"
-                >
-                  {{ product.model }}
-                </th>
-              </tr>
-              <tr>
-                <th class="row-label-col">厂家</th>
-                <th
-                  v-for="product in allProducts"
-                  :key="product.id"
-                  class="product-col"
-                  :class="{ selected: selectedProductIds.includes(product.id) }"
-                  @click="handleProductToggle(product)"
-                >
-                  {{ product.manufacturer || '-' }}
-                </th>
-              </tr>
+              <template v-if="headerRows.length > 0">
+                <tr v-for="(row, rowIdx) in headerRows" :key="rowIdx">
+                  <th class="row-label-col">{{ row[0]?.label || '' }}</th>
+                  <th
+                    v-for="(cell, colIdx) in row.slice(1)"
+                    :key="colIdx"
+                    class="product-col"
+                    :class="{ selected: selectedProductIds.includes(getProductIdByCol(colIdx)) }"
+                    @click="handleProductToggleByCol(colIdx)"
+                  >
+                    {{ cell.value || '-' }}
+                  </th>
+                </tr>
+              </template>
+              <template v-else>
+                <tr>
+                  <th class="row-label-col">品牌</th>
+                  <th
+                    v-for="product in allProducts"
+                    :key="product.id"
+                    class="product-col"
+                    :class="{ selected: selectedProductIds.includes(product.id) }"
+                    @click="handleProductToggle(product)"
+                  >
+                    {{ product.brand }}
+                  </th>
+                </tr>
+                <tr>
+                  <th class="row-label-col">型号</th>
+                  <th
+                    v-for="product in allProducts"
+                    :key="product.id"
+                    class="product-col"
+                    :class="{ selected: selectedProductIds.includes(product.id) }"
+                    @click="handleProductToggle(product)"
+                  >
+                    {{ product.model }}
+                  </th>
+                </tr>
+              </template>
             </thead>
           </table>
         </div>
@@ -97,9 +101,13 @@ interface Product {
   id: number;
   brand: string;
   model: string;
-  manufacturer?: string;
   unit?: string;
   [key: string]: any;
+}
+
+interface HeaderCell {
+  label: string;
+  value: string;
 }
 
 const router = useRouter();
@@ -112,6 +120,7 @@ const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
 const hiddenProductIds = ref<number[]>([]);
+const headerRows = ref<HeaderCell[][]>([]);
 
 const chartColors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#a8edea', '#fed6e3'];
 
@@ -134,6 +143,15 @@ const selectedProducts = computed(() => {
   return allProducts.value.filter(p => selectedProductIds.value.includes(p.id));
 });
 
+const getProductIdByCol = (colIdx: number) => {
+  return allProducts.value[colIdx]?.id ?? -1;
+};
+
+const handleProductToggleByCol = (colIdx: number) => {
+  const product = allProducts.value[colIdx];
+  if (product) handleProductToggle(product);
+};
+
 const loadCategoryConfig = async () => {
   const result = await dbApi.getCategories();
   if (result.success && result.data) {
@@ -150,6 +168,7 @@ const loadProducts = async () => {
   const result = await dbApi.getPowerList(category.value);
   if (result.success && result.data) {
     allProducts.value = result.data;
+    headerRows.value = (result as any).headerRows || [];
     initSelectedFromQuery();
   }
   loading.value = false;
@@ -285,6 +304,7 @@ watch(category, () => {
   hiddenProductIds.value = [];
   categoryName.value = '';
   chartConfigs.value = [];
+  headerRows.value = [];
   loadCategoryConfig();
   loadProducts();
 });
