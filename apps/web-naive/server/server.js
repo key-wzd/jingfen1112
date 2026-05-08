@@ -55,7 +55,7 @@ function cnToEnField(cnName) {
     '电池容量': 'battery_capacity', '视频播放功耗': 'video_power', '游戏功耗': 'game_power',
     '待机功耗': 'standby_power', '浏览网页功耗': 'browser_power', '睡眠功耗': 'sleep_power',
     '休眠功耗': 'dormancy_power', '使用功耗': 'usage_power', '功耗对比场景': 'power_scenario',
-    '图表类型': 'chart_type',
+    '图表类型': 'chart_type', '厂家': 'manufacturer', '单位': 'unit',
   };
   if (pinyinMap[cnName]) return pinyinMap[cnName];
   return cnName
@@ -79,13 +79,14 @@ function isImageValue(val) {
 }
 
 function parseSheetType(sheetName) {
-  if (sheetName.endsWith('产品信息')) {
-    return { type: 'info', categoryName: sheetName.replace(/产品信息$/, '') };
+  const trimmed = sheetName.trim();
+  if (trimmed.endsWith('产品信息')) {
+    return { type: 'info', categoryName: trimmed.replace(/产品信息$/, '').trim() };
   }
-  if (sheetName.endsWith('功耗数据')) {
-    return { type: 'power', categoryName: sheetName.replace(/功耗数据$/, '') };
+  if (trimmed.endsWith('功耗数据')) {
+    return { type: 'power', categoryName: trimmed.replace(/功耗数据$/, '').trim() };
   }
-  return { type: 'config', categoryName: sheetName };
+  return { type: 'config', categoryName: trimmed };
 }
 
 function categoryNameToKey(name) {
@@ -117,6 +118,10 @@ function parseTransposedSheet(rows) {
       if (value !== undefined && value !== null && String(value).trim() !== '') {
         record[fieldName] = value;
         hasData = true;
+      } else {
+        if (!(fieldName in record)) {
+          record[fieldName] = '';
+        }
       }
     }
     if (hasData && (record['品牌'] || record['型号'])) {
@@ -237,7 +242,7 @@ async function ensureTable(tableName, fieldDefs) {
       return `\`${f.en_name}\` VARCHAR(100) NOT NULL COMMENT '${f.cn_name}'`;
     }
     if (f.field_type === 'number') {
-      return `\`${f.en_name}\` INT DEFAULT 0 COMMENT '${f.cn_name}'`;
+      return `\`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`;
     }
     if (f.field_type === 'image') {
       return `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
@@ -267,7 +272,7 @@ async function ensureTable(tableName, fieldDefs) {
     if (!existingNames.has(f.en_name)) {
       let colDef;
       if (f.field_type === 'number') {
-        colDef = `\`${f.en_name}\` INT DEFAULT 0 COMMENT '${f.cn_name}'`;
+        colDef = `\`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`;
       } else if (f.field_type === 'image') {
         colDef = `\`${f.en_name}\` VARCHAR(500) COMMENT '${f.cn_name}'`;
       } else {
@@ -275,6 +280,18 @@ async function ensureTable(tableName, fieldDefs) {
       }
       await pool.query(`ALTER TABLE \`${tableName}\` ADD COLUMN ${colDef}`);
       console.log(`已添加列 ${tableName}.${f.en_name}`);
+    }
+  }
+
+  const [currentCols] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
+  for (const f of nonFixedFields) {
+    if (f.en_name === 'brand' || f.en_name === 'model') continue;
+    if (f.field_type === 'number') {
+      const col = currentCols.find(c => c.Field === f.en_name);
+      if (col && (col.Type === 'int' || col.Type.startsWith('int('))) {
+        await pool.query(`ALTER TABLE \`${tableName}\` MODIFY COLUMN \`${f.en_name}\` FLOAT DEFAULT 0 COMMENT '${f.cn_name}'`);
+        console.log(`已修改列 ${tableName}.${f.en_name} 从 INT 到 FLOAT`);
+      }
     }
   }
 }
@@ -380,6 +397,33 @@ function detectFieldTypes(records) {
   return fieldTypes;
 }
 
+function extractAllFieldNames(rawRows) {
+  const fieldNames = [];
+  for (let rowIdx = 0; rowIdx < rawRows.length; rowIdx++) {
+    const row = rawRows[rowIdx];
+    if (!row || !row[0]) continue;
+    const fieldName = String(row[0]).trim();
+    if (fieldName && !fieldNames.includes(fieldName)) {
+      fieldNames.push(fieldName);
+    }
+  }
+  return fieldNames;
+}
+
+function mergeFieldTypesWithAllNames(fieldTypes, allFieldNames) {
+  const merged = { ...fieldTypes };
+  for (const fieldName of allFieldNames) {
+    if (!merged[fieldName]) {
+      if (fieldName === '品牌' || fieldName === '型号') {
+        merged[fieldName] = 'text';
+      } else {
+        merged[fieldName] = 'text';
+      }
+    }
+  }
+  return merged;
+}
+
 async function syncMetaToDb(categoryKey, categoryName, sheetName, sheetType, tableName, fieldTypes, records) {
   await pool.query(
     `INSERT INTO sheet_meta (category_key, category_name, sheet_name, sheet_type, table_name)
@@ -433,8 +477,8 @@ async function syncChartConfigToDb(categoryKey, chartConfigs) {
 function parseChartConfigFromRows(rows, cnToEnMap) {
   const configs = [];
   for (const row of rows) {
-    const scenario = row['功耗对比场景'] || row['场景'] || '';
-    const chartTypeCn = row['图表类型'] || '柱状图';
+    const scenario = (row['功耗对比场景'] || row['场景'] || '').trim();
+    const chartTypeCn = (row['图表类型'] || '柱状图').trim();
     const chartType = CHART_TYPE_MAP[chartTypeCn] || 'bar';
 
     const dataFields = [];
@@ -492,7 +536,7 @@ async function importSheetData(tableName, records, fieldTypes, imageMap) {
             val = '';
           }
         } else if (fType === 'number') {
-          val = parseInt(val) || 0;
+          val = parseFloat(val) || 0;
         } else {
           val = String(val);
           if (val.startsWith('=')) val = '';
@@ -700,9 +744,26 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
         const worksheet = workbook.Sheets[sheetName];
         const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
         const records = parseTransposedSheet(rawRows);
-        if (records.length === 0) continue;
+        if (records.length === 0) {
+          const allFieldNames = extractAllFieldNames(rawRows);
+          if (allFieldNames.length > 0) {
+            const fieldTypes = mergeFieldTypesWithAllNames({}, allFieldNames);
+            const tableName = `${categoryKey}_${sheetParsed.type}`;
+            const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
+              en_name: cnToEnField(cnName),
+              cn_name: cnName,
+              field_type: fType,
+              display_order: idx,
+            }));
+            await ensureTable(tableName, fieldDefs);
+            await syncMetaToDb(categoryKey, catInfo.name, sheetName, sheetParsed.type, tableName, fieldTypes, records);
+          }
+          continue;
+        }
 
-        const fieldTypes = detectFieldTypes(records);
+        const allFieldNames = extractAllFieldNames(rawRows);
+        let fieldTypes = detectFieldTypes(records);
+        fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
         const tableName = `${categoryKey}_${sheetParsed.type}`;
 
         const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
@@ -924,7 +985,9 @@ async function loadFromTemplateOnFirstRun() {
     const records = parseTransposedSheet(rawRows);
     if (records.length === 0) continue;
 
-    const fieldTypes = detectFieldTypes(records);
+    const allFieldNames = extractAllFieldNames(rawRows);
+    let fieldTypes = detectFieldTypes(records);
+    fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
     const tableName = `${categoryKey}_${parsed.type}`;
     const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
       en_name: cnToEnField(cnName), cn_name: cnName, field_type: fType, display_order: idx,

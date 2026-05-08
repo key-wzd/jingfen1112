@@ -14,7 +14,7 @@
           <table class="product-select-table">
             <thead>
               <tr>
-                <th class="row-label-col"></th>
+                <th class="row-label-col">品牌</th>
                 <th
                   v-for="product in allProducts"
                   :key="product.id"
@@ -22,37 +22,64 @@
                   :class="{ selected: selectedProductIds.includes(product.id) }"
                   @click="handleProductToggle(product)"
                 >
-                  <div class="product-col-inner">
-                    <span class="check-indicator">{{ selectedProductIds.includes(product.id) ? '☑' : '☐' }}</span>
-                    <span>{{ product.brand }} {{ product.model }}</span>
-                  </div>
+                  {{ product.brand }}
                 </th>
               </tr>
-            </thead>
-            <tbody>
               <tr>
-                <td class="row-label-col">产品型号</td>
-                <td
+                <th class="row-label-col">型号</th>
+                <th
                   v-for="product in allProducts"
                   :key="product.id"
                   class="product-col"
                   :class="{ selected: selectedProductIds.includes(product.id) }"
                   @click="handleProductToggle(product)"
                 >
-                  {{ product.model || '-' }}
-                </td>
+                  {{ product.model }}
+                </th>
               </tr>
-            </tbody>
+              <tr>
+                <th class="row-label-col">厂家</th>
+                <th
+                  v-for="product in allProducts"
+                  :key="product.id"
+                  class="product-col"
+                  :class="{ selected: selectedProductIds.includes(product.id) }"
+                  @click="handleProductToggle(product)"
+                >
+                  {{ product.manufacturer || '-' }}
+                </th>
+              </tr>
+            </thead>
           </table>
         </div>
       </section>
 
       <section v-if="selectedProducts.length > 0" class="charts-section">
-        <h3>功耗场景对比</h3>
-        <div class="charts-container">
-          <div v-for="config in chartConfigs" :key="config.scenario" class="chart">
-            <h4>{{ config.scenario }}</h4>
-            <div :id="`chart-${config.scenario}`" class="chart-wrapper"></div>
+        <div class="charts-grid">
+          <div v-for="(row, rowIndex) in chartRows" :key="rowIndex" class="chart-row">
+            <div class="row-legend">
+              <div class="legend-container">
+                <div
+                  v-for="(product, index) in selectedProducts"
+                  :key="product.id"
+                  class="legend-item"
+                  :class="{ inactive: hiddenProductIds.includes(product.id) }"
+                  @click="handleLegendToggle(product)"
+                >
+                  <span class="legend-color" :style="{ backgroundColor: chartColors[index % chartColors.length] }"></span>
+                  <span>{{ product.brand }} {{ product.model }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="row-charts">
+              <div v-for="config in row" :key="config.scenario" class="chart-wrapper">
+                <div class="chart-header">
+                  <h4 class="scenario-name">{{ config.scenario }}</h4>
+                  <div class="unit-label">{{ unitLabel }}</div>
+                </div>
+                <div :id="`chart-${config.scenario}`" class="chart-content"></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -70,6 +97,8 @@ interface Product {
   id: number;
   brand: string;
   model: string;
+  manufacturer?: string;
+  unit?: string;
   [key: string]: any;
 }
 
@@ -82,6 +111,24 @@ const chartConfigs = ref<ChartConfigItem[]>([]);
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
+const hiddenProductIds = ref<number[]>([]);
+
+const chartColors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#a8edea', '#fed6e3'];
+
+const unitLabel = computed(() => {
+  if (selectedProducts.value.length > 0) {
+    return selectedProducts.value[0]?.unit || 'mW';
+  }
+  return 'mW';
+});
+
+const chartRows = computed(() => {
+  const rows = [];
+  for (let i = 0; i < chartConfigs.value.length; i += 2) {
+    rows.push(chartConfigs.value.slice(i, i + 2));
+  }
+  return rows;
+});
 
 const selectedProducts = computed(() => {
   return allProducts.value.filter(p => selectedProductIds.value.includes(p.id));
@@ -126,23 +173,40 @@ const handleProductToggle = (product: Product) => {
   const index = selectedProductIds.value.indexOf(product.id);
   if (index > -1) {
     selectedProductIds.value.splice(index, 1);
+    const hiddenIndex = hiddenProductIds.value.indexOf(product.id);
+    if (hiddenIndex > -1) {
+      hiddenProductIds.value.splice(hiddenIndex, 1);
+    }
   } else {
     selectedProductIds.value.push(product.id);
   }
 };
 
+const handleLegendToggle = (product: Product) => {
+  const index = hiddenProductIds.value.indexOf(product.id);
+  if (index > -1) {
+    hiddenProductIds.value.splice(index, 1);
+  } else {
+    hiddenProductIds.value.push(product.id);
+  }
+  createCharts();
+};
+
 const createCharts = () => {
-  chartConfigs.value.forEach(config => {
+  chartConfigs.value.forEach((config) => {
     const chartDom = document.getElementById(`chart-${config.scenario}`);
     if (!chartDom) return;
+    const existingChart = echarts.getInstanceByDom(chartDom);
+    if (existingChart) existingChart.dispose();
     const chart = echarts.init(chartDom);
     const isHorizontal = config.chartType === 'barH';
-    const isSingleField = config.fields.length === 1;
+    const isLine = config.chartType === 'line';
 
     const productNames = selectedProducts.value.map(p => `${p.brand} ${p.model}`);
 
-    if (isSingleField) {
+    if (isLine) {
       const data = selectedProducts.value.map(p => {
+        if (hiddenProductIds.value.includes(p.id)) return null;
         const field = config.fields[0];
         const val = field ? p[field] : 0;
         return typeof val === 'number' ? val : parseFloat(val) || 0;
@@ -150,49 +214,60 @@ const createCharts = () => {
 
       chart.setOption({
         tooltip: { trigger: 'axis' },
+        legend: { show: false },
         xAxis: { type: 'category', data: productNames },
-        yAxis: { type: 'value', name: 'mW' },
+        yAxis: { type: 'value', name: unitLabel.value },
         series: [{
           name: config.labels[0],
           type: 'line',
           data,
           smooth: true,
-          itemStyle: { color: '#667eea' },
+          itemStyle: { color: chartColors[0] },
           areaStyle: { color: 'rgba(102,126,234,0.15)' },
         }],
       });
     } else if (isHorizontal) {
-      const series = config.fields.map((field, i) => ({
-        name: config.labels[i],
-        type: 'bar' as const,
-        data: selectedProducts.value.map(p => {
+      const series = config.fields.map((field, fieldIndex) => {
+        const visibleData = selectedProducts.value.map((p) => {
+          if (hiddenProductIds.value.includes(p.id)) return null;
           const val = p[field];
           return typeof val === 'number' ? val : parseFloat(val) || 0;
-        }),
-      }));
+        });
+        return {
+          name: productNames[fieldIndex] || '',
+          type: 'bar' as const,
+          data: visibleData,
+          itemStyle: { color: chartColors[fieldIndex % chartColors.length] },
+        };
+      });
 
       chart.setOption({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { data: config.labels },
-        yAxis: { type: 'category', data: productNames },
-        xAxis: { type: 'value', name: 'mW' },
+        legend: { show: false },
+        yAxis: { type: 'category', data: config.labels },
+        xAxis: { type: 'value', name: unitLabel.value },
         series,
       });
     } else {
-      const series = config.fields.map((field, i) => ({
-        name: config.labels[i],
-        type: 'bar' as const,
-        data: selectedProducts.value.map(p => {
+      const series = config.fields.map((field, fieldIndex) => {
+        const visibleData = selectedProducts.value.map((p) => {
+          if (hiddenProductIds.value.includes(p.id)) return null;
           const val = p[field];
           return typeof val === 'number' ? val : parseFloat(val) || 0;
-        }),
-      }));
+        });
+        return {
+          name: productNames[fieldIndex] || '',
+          type: 'bar' as const,
+          data: visibleData,
+          itemStyle: { color: chartColors[fieldIndex % chartColors.length] },
+        };
+      });
 
       chart.setOption({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { data: config.labels },
-        xAxis: { type: 'category', data: productNames },
-        yAxis: { type: 'value', name: 'mW' },
+        legend: { show: false },
+        xAxis: { type: 'category', data: config.labels },
+        yAxis: { type: 'value', name: unitLabel.value },
         series,
       });
     }
@@ -207,6 +282,7 @@ watch(selectedProducts, () => {
 
 watch(category, () => {
   selectedProductIds.value = [];
+  hiddenProductIds.value = [];
   categoryName.value = '';
   chartConfigs.value = [];
   loadCategoryConfig();
@@ -225,7 +301,7 @@ onMounted(() => {
 }
 
 .page-inner {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -287,31 +363,27 @@ onMounted(() => {
   border-collapse: collapse;
 }
 
-.product-select-table th,
-.product-select-table td {
+.product-select-table th {
   padding: 12px 16px;
   text-align: center;
   border-bottom: 1px solid #eee;
   color: #333;
-}
-
-.product-select-table th {
-  background: #f8f9fa;
   font-weight: 600;
-  color: #333;
 }
 
 .row-label-col {
-  width: 100px;
+  width: 80px;
   text-align: left;
   font-weight: 500;
   color: #666;
+  background: #f8f9fa;
 }
 
 .product-col {
   cursor: pointer;
   transition: background 0.2s;
   min-width: 120px;
+  background: white;
 }
 
 .product-col:hover {
@@ -322,50 +394,97 @@ onMounted(() => {
   background: #e8ebff;
 }
 
-.product-col-inner {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  justify-content: center;
-}
-
-.check-indicator {
-  font-size: 1.1rem;
-}
-
 .charts-section {
   background: white;
   border-radius: 12px;
   padding: 24px;
-  margin-bottom: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.charts-section h3 {
-  font-size: 1.2rem;
-  margin: 0 0 20px;
-  color: #333;
+.charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
-.charts-container {
+.chart-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row-legend {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.legend-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.legend-item:hover {
+  background: #f0f2ff;
+}
+
+.legend-item.inactive {
+  opacity: 0.4;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.row-charts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
 }
 
-.chart h4 {
-  font-size: 1rem;
-  margin: 0 0 12px;
-  color: #555;
+.chart-wrapper {
+  display: flex;
+  flex-direction: column;
 }
 
-.chart-wrapper {
+.chart-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.scenario-name {
+  font-size: 1rem;
+  margin: 0 0 4px;
+  color: #333;
+  font-weight: 600;
+}
+
+.unit-label {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.chart-content {
   width: 100%;
   height: 300px;
 }
 
 @media (max-width: 768px) {
-  .charts-container {
+  .row-charts {
     grid-template-columns: 1fr;
   }
 }

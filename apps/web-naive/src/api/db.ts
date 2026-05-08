@@ -52,7 +52,7 @@ export interface PeripheralPower {
 
 export interface ChartConfigItem {
   scenario: string;
-  chartType: 'bar' | 'barH' | 'line';
+  chartType: 'bar' | 'barH' | 'line' | 'pie' | 'radar';
   fields: string[];
   labels: string[];
 }

@@ -120,12 +120,14 @@ const createCharts = () => {
   props.chartConfigs.forEach(config => {
     const chartDom = document.getElementById(`chart-${config.scenario}`);
     if (!chartDom) return;
+    const existingChart = echarts.getInstanceByDom(chartDom);
+    if (existingChart) existingChart.dispose();
     const chart = echarts.init(chartDom);
     const isHorizontal = config.chartType === 'barH';
-    const isSingleField = config.fields.length === 1;
+    const isLine = config.chartType === 'line';
     const productNames = selectedProducts.value.map(p => `${p.brand} ${p.model}`);
 
-    if (isSingleField) {
+    if (isLine) {
       const data = selectedProducts.value.map(p => {
         const field = config.fields[0];
         const val = field ? p[field] : 0;
