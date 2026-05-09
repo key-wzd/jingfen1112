@@ -248,11 +248,17 @@ async function getMetaFromDb() {
         return col;
       });
 
+    const cnToEnFieldMap = {};
+    for (const f of sheetFields) {
+      cnToEnFieldMap[f.cn_name] = f.en_name;
+    }
+
     const sheetHeaderRows = headerRowsDb
       .filter(h => h.category_key === s.category_key && h.sheet_type === s.sheet_type)
       .reduce((acc, h) => {
         if (!acc[h.row_index]) acc[h.row_index] = [];
-        acc[h.row_index].push({ label: h.field_label, value: h.field_value });
+        const fieldKey = cnToEnFieldMap[h.field_label] || cnToEnField(h.field_label) || '';
+        acc[h.row_index].push({ label: h.field_label, value: h.field_value, fieldKey });
         return acc;
       }, []);
 
@@ -758,7 +764,7 @@ app.get('/api/:category', async (req, res) => {
   }
 });
 
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: 'uploads/', limits: { fileSize: 200 * 1024 * 1024 } });
 
 app.post('/api/import-all', upload.single('file'), async (req, res) => {
   try {
@@ -766,10 +772,15 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
       return res.status(400).json({ success: false, message: '请上传文件' });
     }
 
+    await pool.query('SET SESSION max_allowed_packet = 1073741824');
+    await pool.query('SET SESSION wait_timeout = 28800');
+    await pool.query('SET SESSION net_read_timeout = 300');
+    await pool.query('SET SESSION net_write_timeout = 300');
+
     const imageMap = extractImagesFromXlsx(req.file.path);
     console.log('提取到的图片映射:', Object.keys(imageMap).length > 0 ? '有图片' : '无图片');
 
-    const workbook = xlsx.readFile(req.file.path);
+    const workbook = xlsx.readFile(req.file.path, { cellStyles: true });
     const sheetNames = workbook.SheetNames;
 
     const sheetInfoMap = {};
@@ -810,43 +821,55 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
       await syncImageMapToDb(categoryKey, imageMap);
 
       for (const [sheetName, sheetParsed] of Object.entries(catInfo.sheets)) {
-        const worksheet = workbook.Sheets[sheetName];
-        const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
-        const records = parseTransposedSheet(rawRows);
+        try {
+          const worksheet = workbook.Sheets[sheetName];
+          const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
+          const records = parseTransposedSheet(rawRows);
 
-        const allFieldNames = extractAllFieldNames(rawRows);
-        let fieldTypes = records.length > 0 ? detectFieldTypes(records) : {};
-        fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
-        const tableName = `${categoryKey}_${sheetParsed.type}`;
+          const allFieldNames = extractAllFieldNames(rawRows);
+          let fieldTypes = records.length > 0 ? detectFieldTypes(records) : {};
+          fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
+          const tableName = `${categoryKey}_${sheetParsed.type}`;
 
-        const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
-          en_name: cnToEnField(cnName),
-          cn_name: cnName,
-          field_type: fType,
-          display_order: idx,
-        }));
+          const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({
+            en_name: cnToEnField(cnName),
+            cn_name: cnName,
+            field_type: fType,
+            display_order: idx,
+          }));
 
-        await createTable(tableName, fieldDefs);
-        await syncMetaToDb(categoryKey, catInfo.name, sheetName, sheetParsed.type, tableName, fieldTypes, records);
+          await createTable(tableName, fieldDefs);
+          await syncMetaToDb(categoryKey, catInfo.name, sheetName, sheetParsed.type, tableName, fieldTypes, records);
 
-        const headerRows = extractHeaderRows(rawRows, 3);
-        await syncHeaderRowsToDb(categoryKey, sheetParsed.type, headerRows);
+          const headerRows = extractHeaderRows(rawRows, 3);
+          await syncHeaderRowsToDb(categoryKey, sheetParsed.type, headerRows);
 
-        if (records.length > 0) {
-          const dbImageMap = await getImageMapFromDb(categoryKey);
-          const mergedImageMap = { ...imageMap, ...dbImageMap };
-          const importResult = await importSheetData(tableName, records, fieldTypes, mergedImageMap);
+          if (records.length > 0) {
+            const dbImageMap = await getImageMapFromDb(categoryKey);
+            const mergedImageMap = { ...imageMap, ...dbImageMap };
+            const importResult = await importSheetData(tableName, records, fieldTypes, mergedImageMap);
 
+            results[`${categoryKey}_${sheetParsed.type}`] = {
+              sheetName,
+              categoryName: catInfo.name + (sheetParsed.type === 'info' ? '产品信息' : '功耗数据'),
+              successCount: importResult.success,
+              failCount: importResult.fail,
+            };
+            totalSuccess += importResult.success;
+            totalFail += importResult.fail;
+          }
+          processedSheets++;
+        } catch (sheetErr) {
+          console.error(`处理Sheet "${sheetName}" 失败:`, sheetErr.message);
           results[`${categoryKey}_${sheetParsed.type}`] = {
             sheetName,
-            categoryName: catInfo.name + (sheetParsed.type === 'info' ? '产品信息' : '功耗数据'),
-            successCount: importResult.success,
-            failCount: importResult.fail,
+            categoryName: catInfo.name,
+            successCount: 0,
+            failCount: 0,
+            error: sheetErr.message,
           };
-          totalSuccess += importResult.success;
-          totalFail += importResult.fail;
+          processedSheets++;
         }
-        processedSheets++;
       }
     }
 

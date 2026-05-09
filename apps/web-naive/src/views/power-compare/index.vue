@@ -13,17 +13,17 @@
         <div v-else class="product-select-table-wrap">
           <table class="product-select-table">
             <thead>
-              <template v-if="headerRows.length > 0">
-                <tr v-for="(row, rowIdx) in headerRows" :key="rowIdx">
-                  <th class="row-label-col">{{ row[0]?.label || '' }}</th>
+              <template v-if="tableRowDefs.length > 0">
+                <tr v-for="(rowDef, rowIdx) in tableRowDefs" :key="rowIdx">
+                  <th class="row-label-col">{{ rowDef.label }}</th>
                   <th
-                    v-for="(cell, colIdx) in row.slice(1)"
-                    :key="colIdx"
+                    v-for="product in allProducts"
+                    :key="product.id"
                     class="product-col"
-                    :class="{ selected: selectedProductIds.includes(getProductIdByCol(colIdx)) }"
-                    @click="handleProductToggleByCol(colIdx)"
+                    :class="{ selected: selectedProductIds.includes(product.id) }"
+                    @click="handleProductToggle(product)"
                   >
-                    {{ cell.value || '-' }}
+                    {{ product[rowDef.fieldKey] || '-' }}
                   </th>
                 </tr>
               </template>
@@ -64,14 +64,13 @@
             <div class="row-legend">
               <div class="legend-container">
                 <div
-                  v-for="(product, index) in selectedProducts"
+                  v-for="product in selectedProducts"
                   :key="product.id"
                   class="legend-item"
-                  :class="{ inactive: hiddenProductIds.includes(product.id) }"
-                  @click="handleLegendToggle(product)"
+                  @click="handleProductToggle(product)"
                 >
-                  <span class="legend-color" :style="{ backgroundColor: chartColors[index % chartColors.length] }"></span>
-                  <span>{{ product.brand }} {{ product.model }}</span>
+                  <span class="legend-color" :style="{ backgroundColor: getProductColor(product) }"></span>
+                  <span class="legend-text">{{ product.brand }} {{ product.model }}</span>
                 </div>
               </div>
             </div>
@@ -108,6 +107,7 @@ interface Product {
 interface HeaderCell {
   label: string;
   value: string;
+  fieldKey: string;
 }
 
 const router = useRouter();
@@ -119,7 +119,6 @@ const chartConfigs = ref<ChartConfigItem[]>([]);
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
-const hiddenProductIds = ref<number[]>([]);
 const headerRows = ref<HeaderCell[][]>([]);
 
 const chartColors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#a8edea', '#fed6e3'];
@@ -129,6 +128,19 @@ const unitLabel = computed(() => {
     return selectedProducts.value[0]?.unit || 'mW';
   }
   return 'mW';
+});
+
+const tableRowDefs = computed(() => {
+  if (headerRows.value.length > 0) {
+    return headerRows.value.map(row => ({
+      label: row[0]?.label || '',
+      fieldKey: row[0]?.fieldKey || '',
+    }));
+  }
+  return [
+    { label: '品牌', fieldKey: 'brand' },
+    { label: '型号', fieldKey: 'model' },
+  ];
 });
 
 const chartRows = computed(() => {
@@ -143,13 +155,9 @@ const selectedProducts = computed(() => {
   return allProducts.value.filter(p => selectedProductIds.value.includes(p.id));
 });
 
-const getProductIdByCol = (colIdx: number) => {
-  return allProducts.value[colIdx]?.id ?? -1;
-};
-
-const handleProductToggleByCol = (colIdx: number) => {
-  const product = allProducts.value[colIdx];
-  if (product) handleProductToggle(product);
+const getProductColor = (product: Product) => {
+  const index = allProducts.value.findIndex(p => p.id === product.id);
+  return chartColors[index % chartColors.length];
 };
 
 const loadCategoryConfig = async () => {
@@ -192,23 +200,9 @@ const handleProductToggle = (product: Product) => {
   const index = selectedProductIds.value.indexOf(product.id);
   if (index > -1) {
     selectedProductIds.value.splice(index, 1);
-    const hiddenIndex = hiddenProductIds.value.indexOf(product.id);
-    if (hiddenIndex > -1) {
-      hiddenProductIds.value.splice(hiddenIndex, 1);
-    }
   } else {
     selectedProductIds.value.push(product.id);
   }
-};
-
-const handleLegendToggle = (product: Product) => {
-  const index = hiddenProductIds.value.indexOf(product.id);
-  if (index > -1) {
-    hiddenProductIds.value.splice(index, 1);
-  } else {
-    hiddenProductIds.value.push(product.id);
-  }
-  createCharts();
 };
 
 const createCharts = () => {
@@ -221,71 +215,45 @@ const createCharts = () => {
     const isHorizontal = config.chartType === 'barH';
     const isLine = config.chartType === 'line';
 
-    const productNames = selectedProducts.value.map(p => `${p.brand} ${p.model}`);
-
-    if (isLine) {
-      const data = selectedProducts.value.map(p => {
-        if (hiddenProductIds.value.includes(p.id)) return null;
-        const field = config.fields[0];
-        const val = field ? p[field] : 0;
+    const series = selectedProducts.value.map((product) => {
+      const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
+      const data = config.fields.map(field => {
+        const val = product[field];
         return typeof val === 'number' ? val : parseFloat(val) || 0;
       });
 
-      chart.setOption({
-        tooltip: { trigger: 'axis' },
-        legend: { show: false },
-        xAxis: { type: 'category', data: productNames },
-        yAxis: { type: 'value', name: unitLabel.value },
-        series: [{
-          name: config.labels[0],
-          type: 'line',
+      if (isLine) {
+        return {
+          name: `${product.brand} ${product.model}`,
+          type: 'line' as const,
           data,
           smooth: true,
-          itemStyle: { color: chartColors[0] },
-          areaStyle: { color: 'rgba(102,126,234,0.15)' },
-        }],
-      });
-    } else if (isHorizontal) {
-      const series = config.fields.map((field, fieldIndex) => {
-        const visibleData = selectedProducts.value.map((p) => {
-          if (hiddenProductIds.value.includes(p.id)) return null;
-          const val = p[field];
-          return typeof val === 'number' ? val : parseFloat(val) || 0;
-        });
-        return {
-          name: productNames[fieldIndex] || '',
-          type: 'bar' as const,
-          data: visibleData,
-          itemStyle: { color: chartColors[fieldIndex % chartColors.length] },
+          itemStyle: { color: chartColors[colorIndex % chartColors.length] },
         };
-      });
+      }
+      return {
+        name: `${product.brand} ${product.model}`,
+        type: 'bar' as const,
+        data,
+        itemStyle: { color: chartColors[colorIndex % chartColors.length] },
+      };
+    });
 
+    const axisData = config.labels;
+
+    if (isHorizontal) {
       chart.setOption({
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
         legend: { show: false },
-        yAxis: { type: 'category', data: config.labels },
+        yAxis: { type: 'category', data: axisData },
         xAxis: { type: 'value', name: unitLabel.value },
         series,
       });
     } else {
-      const series = config.fields.map((field, fieldIndex) => {
-        const visibleData = selectedProducts.value.map((p) => {
-          if (hiddenProductIds.value.includes(p.id)) return null;
-          const val = p[field];
-          return typeof val === 'number' ? val : parseFloat(val) || 0;
-        });
-        return {
-          name: productNames[fieldIndex] || '',
-          type: 'bar' as const,
-          data: visibleData,
-          itemStyle: { color: chartColors[fieldIndex % chartColors.length] },
-        };
-      });
-
       chart.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        tooltip: { trigger: 'axis', axisPointer: { type: isLine ? 'line' : 'shadow' } },
         legend: { show: false },
-        xAxis: { type: 'category', data: config.labels },
+        xAxis: { type: 'category', data: axisData },
         yAxis: { type: 'value', name: unitLabel.value },
         series,
       });
@@ -301,7 +269,6 @@ watch(selectedProducts, () => {
 
 watch(category, () => {
   selectedProductIds.value = [];
-  hiddenProductIds.value = [];
   categoryName.value = '';
   chartConfigs.value = [];
   headerRows.value = [];
@@ -458,17 +425,18 @@ onMounted(() => {
   background: #f0f2ff;
 }
 
-.legend-item.inactive {
-  opacity: 0.4;
-}
-
 .legend-color {
   width: 16px;
   height: 16px;
   border-radius: 4px;
 }
 
-.row-charts {
+.legend-text {
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.chart-row .row-charts {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
@@ -504,7 +472,7 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .row-charts {
+  .chart-row .row-charts {
     grid-template-columns: 1fr;
   }
 }
