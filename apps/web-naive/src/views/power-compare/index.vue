@@ -79,7 +79,7 @@
               <div v-for="config in row" :key="config.scenario" class="chart-wrapper">
                 <div class="chart-header">
                   <h4 class="scenario-name">{{ config.scenario }}</h4>
-                  <div class="unit-label">{{ unitLabel }}</div>
+                  <div class="unit-label">{{ config.unit || unitLabel }}</div>
                 </div>
                 <div :id="`chart-${config.scenario}`" class="chart-content"></div>
               </div>

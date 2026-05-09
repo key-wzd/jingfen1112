@@ -233,7 +233,7 @@ async function getMetaFromDb() {
       .reduce((acc, c) => {
         let existing = acc.find(a => a.scenario === c.scenario);
         if (!existing) {
-          existing = { scenario: c.scenario, chartType: c.chart_type, fields: [], labels: [] };
+          existing = { scenario: c.scenario, chartType: c.chart_type, unit: c.unit || '', fields: [], labels: [] };
           acc.push(existing);
         }
         existing.fields.push(c.field_name);
@@ -528,9 +528,9 @@ async function syncChartConfigToDb(categoryKey, chartConfigs) {
     const cc = chartConfigs[si];
     for (let fi = 0; fi < cc.fields.length; fi++) {
       await pool.query(
-        `INSERT INTO chart_config (category_key, sheet_type, scenario, scenario_order, chart_type, field_name, field_label, field_order)
-         VALUES (?, 'power', ?, ?, ?, ?, ?, ?)`,
-        [categoryKey, cc.scenario, si, cc.chartType, cc.fields[fi], cc.labels[fi], fi]
+        `INSERT INTO chart_config (category_key, sheet_type, scenario, scenario_order, chart_type, unit, field_name, field_label, field_order)
+         VALUES (?, 'power', ?, ?, ?, ?, ?, ?, ?)`,
+        [categoryKey, cc.scenario, si, cc.chartType, cc.unit || null, cc.fields[fi], cc.labels[fi], fi]
       );
     }
   }
@@ -542,15 +542,15 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
     const scenario = (row['功耗对比场景'] || row['场景'] || '').trim();
     const chartTypeCn = (row['图表类型'] || '柱状图').trim();
     const chartType = CHART_TYPE_MAP[chartTypeCn] || 'bar';
+    const unit = (row['单位'] || '').trim();
 
     const dataFields = [];
     const dataLabels = [];
 
     for (const [key, val] of Object.entries(row)) {
-      if (key === '功耗对比场景' || key === '场景' || key === '图表类型') continue;
+      if (key === '功耗对比场景' || key === '场景' || key === '图表类型' || key === '单位') continue;
       if (!val || typeof val !== 'string') continue;
       const trimmedVal = val.trim();
-      if (trimmedVal === scenario) continue;
       const enName = cnToEnMap[trimmedVal];
       if (enName) {
         dataFields.push(enName);
@@ -559,7 +559,7 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
     }
 
     if (scenario && dataFields.length > 0) {
-      configs.push({ scenario, chartType, fields: dataFields, labels: dataLabels });
+      configs.push({ scenario, chartType, unit, fields: dataFields, labels: dataLabels });
     }
   }
   return configs;
