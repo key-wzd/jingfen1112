@@ -111,9 +111,10 @@ function parseTransposedSheet(rows) {
     let hasData = false;
     for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
       const row = rows[rowIdx];
-      if (!row || !row[0]) continue;
+      if (!row || row[0] === undefined || row[0] === null) continue;
       const fieldName = String(row[0]).trim();
       if (!fieldName) continue;
+      if (fieldName === '功耗对比场景' || fieldName === '图表类型') continue;
       const value = col < row.length ? row[col] : '';
       if (value !== undefined && value !== null && String(value).trim() !== '') {
         record[fieldName] = value;
@@ -124,7 +125,7 @@ function parseTransposedSheet(rows) {
         }
       }
     }
-    if (hasData && (record['品牌'] || record['型号'])) {
+    if (hasData) {
       records.push(record);
     }
   }
@@ -275,6 +276,7 @@ async function getMetaFromDb() {
 }
 
 async function createTable(tableName, fieldDefs) {
+  await pool.query(`DROP TABLE IF EXISTS \`${tableName}\``);
   const nonFixedFields = fieldDefs.filter(f => !FIXED_COLUMNS.includes(f.en_name));
   const columnDefs = nonFixedFields.map(f => {
     if (f.en_name === 'brand' || f.en_name === 'model') {
@@ -296,7 +298,6 @@ async function createTable(tableName, fieldDefs) {
     ...columnDefs.filter(c => !c.startsWith('`brand`') && !c.startsWith('`model`')),
     'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
     'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
-    'UNIQUE KEY unique_brand_model (brand, model)',
   ];
 
   await pool.query(
@@ -381,7 +382,7 @@ async function initDatabase() {
   console.log('数据库初始化完成（含元数据表、图片映射表、表头行表）');
 }
 
-function detectFieldTypes(records) {
+function detectFieldTypes(records, sheetType) {
   const fieldTypes = {};
   const allFields = new Set();
   for (const record of records) {
@@ -393,6 +394,11 @@ function detectFieldTypes(records) {
   for (const field of allFields) {
     if (field === '品牌' || field === '型号') {
       fieldTypes[field] = 'text';
+      continue;
+    }
+
+    if (sheetType === 'power' && field.includes('功耗')) {
+      fieldTypes[field] = 'number';
       continue;
     }
 
@@ -451,7 +457,7 @@ function mergeFieldTypesWithAllNames(fieldTypes, allFieldNames) {
   return merged;
 }
 
-function extractHeaderRows(rawRows, maxRows = 3) {
+function extractHeaderRows(rawRows, maxRows = 5) {
   const headerRows = [];
   const maxCols = Math.max(...rawRows.map(row => (row && row.length) || 0));
   const rowCount = Math.min(rawRows.length, maxRows);
@@ -543,10 +549,12 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
     for (const [key, val] of Object.entries(row)) {
       if (key === '功耗对比场景' || key === '场景' || key === '图表类型') continue;
       if (!val || typeof val !== 'string') continue;
-      const enName = cnToEnMap[val];
+      const trimmedVal = val.trim();
+      if (trimmedVal === scenario) continue;
+      const enName = cnToEnMap[trimmedVal];
       if (enName) {
         dataFields.push(enName);
-        dataLabels.push(val);
+        dataLabels.push(trimmedVal);
       }
     }
 
@@ -572,12 +580,11 @@ async function importSheetData(tableName, records, fieldTypes, imageMap) {
   let failCount = 0;
 
   for (const row of records) {
-    try {
-      const brand = row['品牌'] || '';
-      const model = row['型号'] || '';
-      if (!brand && !model) continue;
+      try {
+        const brand = row['品牌'] || '';
+        const model = row['型号'] || '';
 
-      const values = [brand, model];
+        const values = [brand, model];
       for (const cnName of nonKeyCnNames) {
         const enName = cnToEnField(cnName);
         const fType = fieldTypes[cnName];
@@ -772,11 +779,6 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
       return res.status(400).json({ success: false, message: '请上传文件' });
     }
 
-    await pool.query('SET SESSION max_allowed_packet = 1073741824');
-    await pool.query('SET SESSION wait_timeout = 28800');
-    await pool.query('SET SESSION net_read_timeout = 300');
-    await pool.query('SET SESSION net_write_timeout = 300');
-
     const imageMap = extractImagesFromXlsx(req.file.path);
     console.log('提取到的图片映射:', Object.keys(imageMap).length > 0 ? '有图片' : '无图片');
 
@@ -827,7 +829,7 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
           const records = parseTransposedSheet(rawRows);
 
           const allFieldNames = extractAllFieldNames(rawRows);
-          let fieldTypes = records.length > 0 ? detectFieldTypes(records) : {};
+          let fieldTypes = records.length > 0 ? detectFieldTypes(records, sheetParsed.type) : {};
           fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
           const tableName = `${categoryKey}_${sheetParsed.type}`;
 
@@ -1069,7 +1071,7 @@ async function loadFromTemplateOnFirstRun() {
     if (records.length === 0) continue;
 
     const allFieldNames = extractAllFieldNames(rawRows);
-    let fieldTypes = detectFieldTypes(records);
+    let fieldTypes = detectFieldTypes(records, parsed.type);
     fieldTypes = mergeFieldTypesWithAllNames(fieldTypes, allFieldNames);
     const tableName = `${categoryKey}_${parsed.type}`;
     const fieldDefs = Object.entries(fieldTypes).map(([cnName, fType], idx) => ({

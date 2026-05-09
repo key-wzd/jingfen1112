@@ -13,17 +13,17 @@
         <div v-else class="product-select-table-wrap">
           <table class="product-select-table">
             <thead>
-              <template v-if="tableRowDefs.length > 0">
-                <tr v-for="(rowDef, rowIdx) in tableRowDefs" :key="rowIdx">
-                  <th class="row-label-col">{{ rowDef.label }}</th>
+              <template v-if="headerRows.length > 0">
+                <tr v-for="(row, rowIdx) in headerRows" :key="rowIdx">
+                  <th class="row-label-col">{{ row[0]?.label || '-' }}</th>
                   <th
-                    v-for="product in allProducts"
-                    :key="product.id"
+                    v-for="(cell, colIdx) in row.slice(1)"
+                    :key="colIdx"
                     class="product-col"
-                    :class="{ selected: selectedProductIds.includes(product.id) }"
-                    @click="handleProductToggle(product)"
+                    :class="{ selected: selectedProductIds.includes(getProductIdByCol(colIdx)) }"
+                    @click="handleProductToggleByCol(colIdx)"
                   >
-                    {{ product[rowDef.fieldKey] || '-' }}
+                    {{ cell.value || '-' }}
                   </th>
                 </tr>
               </template>
@@ -67,7 +67,8 @@
                   v-for="product in selectedProducts"
                   :key="product.id"
                   class="legend-item"
-                  @click="handleProductToggle(product)"
+                  :class="{ inactive: hiddenProductIds.includes(product.id) }"
+                  @click="handleLegendToggle(product)"
                 >
                   <span class="legend-color" :style="{ backgroundColor: getProductColor(product) }"></span>
                   <span class="legend-text">{{ product.brand }} {{ product.model }}</span>
@@ -119,15 +120,29 @@ const chartConfigs = ref<ChartConfigItem[]>([]);
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
+const hiddenProductIds = ref<number[]>([]);
 const headerRows = ref<HeaderCell[][]>([]);
 
 const chartColors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#a8edea', '#fed6e3'];
 
 const unitLabel = computed(() => {
-  if (selectedProducts.value.length > 0) {
-    return selectedProducts.value[0]?.unit || 'mW';
+  if (headerRows.value.length > 0) {
+    const unitRow = headerRows.value.find(row => {
+      const label = row[0]?.label || '';
+      return label === '单位' || label.includes('单位') || label.startsWith('单位：');
+    });
+    if (unitRow) {
+      for (let i = 1; i < unitRow.length; i++) {
+        if (unitRow[i]?.value && unitRow[i].value.trim()) {
+          return unitRow[i].value.trim();
+        }
+      }
+    }
   }
-  return 'mW';
+  if (selectedProducts.value.length > 0) {
+    return selectedProducts.value[0]?.unit || 'mAH';
+  }
+  return 'mAH';
 });
 
 const tableRowDefs = computed(() => {
@@ -154,6 +169,17 @@ const chartRows = computed(() => {
 const selectedProducts = computed(() => {
   return allProducts.value.filter(p => selectedProductIds.value.includes(p.id));
 });
+
+const getProductIdByCol = (colIdx: number) => {
+  return allProducts.value[colIdx]?.id ?? -1;
+};
+
+const handleProductToggleByCol = (colIdx: number) => {
+  const product = allProducts.value[colIdx];
+  if (product) {
+    handleProductToggle(product);
+  }
+};
 
 const getProductColor = (product: Product) => {
   const index = allProducts.value.findIndex(p => p.id === product.id);
@@ -200,9 +226,23 @@ const handleProductToggle = (product: Product) => {
   const index = selectedProductIds.value.indexOf(product.id);
   if (index > -1) {
     selectedProductIds.value.splice(index, 1);
+    const hiddenIndex = hiddenProductIds.value.indexOf(product.id);
+    if (hiddenIndex > -1) {
+      hiddenProductIds.value.splice(hiddenIndex, 1);
+    }
   } else {
     selectedProductIds.value.push(product.id);
   }
+};
+
+const handleLegendToggle = (product: Product) => {
+  const index = hiddenProductIds.value.indexOf(product.id);
+  if (index > -1) {
+    hiddenProductIds.value.splice(index, 1);
+  } else {
+    hiddenProductIds.value.push(product.id);
+  }
+  createCharts();
 };
 
 const createCharts = () => {
@@ -217,7 +257,9 @@ const createCharts = () => {
 
     const series = selectedProducts.value.map((product) => {
       const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
+      const isHidden = hiddenProductIds.value.includes(product.id);
       const data = config.fields.map(field => {
+        if (isHidden) return null;
         const val = product[field];
         return typeof val === 'number' ? val : parseFloat(val) || 0;
       });
@@ -228,14 +270,16 @@ const createCharts = () => {
           type: 'line' as const,
           data,
           smooth: true,
-          itemStyle: { color: chartColors[colorIndex % chartColors.length] },
+          itemStyle: { color: chartColors[colorIndex % chartColors.length], opacity: isHidden ? 0.15 : 1 },
+          lineStyle: { opacity: isHidden ? 0.15 : 1 },
+          areaStyle: isHidden ? undefined : { color: `rgba(${hexToRgb(chartColors[colorIndex % chartColors.length])},0.15)` },
         };
       }
       return {
         name: `${product.brand} ${product.model}`,
         type: 'bar' as const,
         data,
-        itemStyle: { color: chartColors[colorIndex % chartColors.length] },
+        itemStyle: { color: chartColors[colorIndex % chartColors.length], opacity: isHidden ? 0.15 : 1 },
       };
     });
 
@@ -261,6 +305,14 @@ const createCharts = () => {
   });
 };
 
+function hexToRgb(hex: string) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (result) {
+    return `${parseInt(result[1], 16)},${parseInt(result[2], 16)},${parseInt(result[3], 16)}`;
+  }
+  return '102,126,234';
+}
+
 watch(selectedProducts, () => {
   if (selectedProducts.value.length > 0) {
     setTimeout(createCharts, 100);
@@ -269,6 +321,7 @@ watch(selectedProducts, () => {
 
 watch(category, () => {
   selectedProductIds.value = [];
+  hiddenProductIds.value = [];
   categoryName.value = '';
   chartConfigs.value = [];
   headerRows.value = [];
@@ -423,6 +476,10 @@ onMounted(() => {
 
 .legend-item:hover {
   background: #f0f2ff;
+}
+
+.legend-item.inactive {
+  opacity: 0.4;
 }
 
 .legend-color {
