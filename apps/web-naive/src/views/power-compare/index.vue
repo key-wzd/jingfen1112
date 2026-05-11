@@ -70,8 +70,8 @@
                   :class="{ inactive: hiddenProductIds.includes(product.id) }"
                   @click="handleLegendToggle(product)"
                 >
-                  <span class="legend-color" :style="{ backgroundColor: getProductColor(product) }"></span>
-                  <span class="legend-text">{{ product.brand }} {{ product.model }}</span>
+                  <span class="legend-color" :style="{ backgroundColor: hiddenProductIds.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                  <span class="legend-text">{{ getModelName(product) }}</span>
                 </div>
               </div>
             </div>
@@ -79,7 +79,7 @@
               <div v-for="config in row" :key="config.scenario" class="chart-wrapper">
                 <div class="chart-header">
                   <h4 class="scenario-name">{{ config.scenario }}</h4>
-                  <div class="unit-label">{{ config.unit || unitLabel }}</div>
+                  <div class="unit-label">{{ unitLabel }}</div>
                 </div>
                 <div :id="`chart-${config.scenario}`" class="chart-content"></div>
               </div>
@@ -123,7 +123,12 @@ const selectedProductIds = ref<number[]>([]);
 const hiddenProductIds = ref<number[]>([]);
 const headerRows = ref<HeaderCell[][]>([]);
 
-const chartColors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#a8edea', '#fed6e3'];
+const chartColors = [
+  '#E63946', '#457B9D', '#2A9D8F', '#E9C46A',
+  '#F4A261', '#264653', '#6A4C93', '#1982C4',
+  '#8AC926', '#FF595E', '#FFCA3A', '#6A0572',
+  '#AB83A1', '#36827F', '#D4A373', '#588157',
+];
 
 const unitLabel = computed(() => {
   if (headerRows.value.length > 0) {
@@ -143,19 +148,6 @@ const unitLabel = computed(() => {
     return selectedProducts.value[0]?.unit || 'mAH';
   }
   return 'mAH';
-});
-
-const tableRowDefs = computed(() => {
-  if (headerRows.value.length > 0) {
-    return headerRows.value.map(row => ({
-      label: row[0]?.label || '',
-      fieldKey: row[0]?.fieldKey || '',
-    }));
-  }
-  return [
-    { label: '品牌', fieldKey: 'brand' },
-    { label: '型号', fieldKey: 'model' },
-  ];
 });
 
 const chartRows = computed(() => {
@@ -184,6 +176,16 @@ const handleProductToggleByCol = (colIdx: number) => {
 const getProductColor = (product: Product) => {
   const index = allProducts.value.findIndex(p => p.id === product.id);
   return chartColors[index % chartColors.length];
+};
+
+const getModelName = (product: Product) => {
+  if (headerRows.value.length >= 2 && headerRows.value[1]) {
+    const modelFieldKey = headerRows.value[1][0]?.fieldKey;
+    if (modelFieldKey && product[modelFieldKey]) {
+      return product[modelFieldKey];
+    }
+  }
+  return product.model || `${product.brand} ${product.model}`;
 };
 
 const loadCategoryConfig = async () => {
@@ -258,6 +260,8 @@ const createCharts = () => {
     const series = selectedProducts.value.map((product) => {
       const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
       const isHidden = hiddenProductIds.value.includes(product.id);
+      const displayColor = isHidden ? '#cccccc' : chartColors[colorIndex % chartColors.length];
+      const displayOpacity = isHidden ? 0.3 : 1;
       const data = config.fields.map(field => {
         if (isHidden) return null;
         const val = product[field];
@@ -266,20 +270,20 @@ const createCharts = () => {
 
       if (isLine) {
         return {
-          name: `${product.brand} ${product.model}`,
+          name: getModelName(product),
           type: 'line' as const,
           data,
           smooth: true,
-          itemStyle: { color: chartColors[colorIndex % chartColors.length], opacity: isHidden ? 0.15 : 1 },
-          lineStyle: { opacity: isHidden ? 0.15 : 1 },
+          itemStyle: { color: displayColor, opacity: displayOpacity },
+          lineStyle: { color: displayColor, opacity: displayOpacity },
           areaStyle: isHidden ? undefined : { color: `rgba(${hexToRgb(chartColors[colorIndex % chartColors.length])},0.15)` },
         };
       }
       return {
-        name: `${product.brand} ${product.model}`,
+        name: getModelName(product),
         type: 'bar' as const,
         data,
-        itemStyle: { color: chartColors[colorIndex % chartColors.length], opacity: isHidden ? 0.15 : 1 },
+        itemStyle: { color: displayColor, opacity: displayOpacity },
       };
     });
 
@@ -479,7 +483,7 @@ onMounted(() => {
 }
 
 .legend-item.inactive {
-  opacity: 0.4;
+  opacity: 0.45;
 }
 
 .legend-color {
@@ -491,6 +495,7 @@ onMounted(() => {
 .legend-text {
   color: #333;
   font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .chart-row .row-charts {

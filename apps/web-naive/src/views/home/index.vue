@@ -20,7 +20,7 @@
           >
             <div class="category-icon">{{ cat.icon }}</div>
             <h3 class="category-name">{{ cat.name }}</h3>
-            <p class="category-desc">{{ cat.desc }}</p>
+            <p class="category-desc">对比{{ cat.name }}的参数与功耗表现</p>
             <span class="category-link">查看对比 →</span>
           </div>
         </div>
@@ -34,46 +34,50 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { dbApi } from '#/api/db';
 
 const router = useRouter();
 
-const categories = [
-  {
-    key: 'phones',
-    name: '旗舰手机',
-    icon: '📱',
-    desc: '对比旗舰手机的参数与功耗表现',
-  },
-  {
-    key: 'mid_low_phones',
-    name: '中低端手机',
-    icon: '📲',
-    desc: '对比中低端手机的参数与功耗表现',
-  },
-  {
-    key: 'keyboards',
-    name: '键盘',
-    icon: '⌨️',
-    desc: '对比键盘的参数与功耗表现',
-  },
-  {
-    key: 'mice',
-    name: '鼠标',
-    icon: '🖱️',
-    desc: '对比鼠标的参数与功耗表现',
-  },
-  {
-    key: 'remote_controls',
-    name: '遥控器',
-    icon: '🎮',
-    desc: '对比遥控器的参数与功耗表现',
-  },
-];
+const iconMap: Record<string, string> = {
+  'phones': '📱',
+  'mid_low_phones': '📲',
+  'keyboards': '⌨️',
+  'mice': '🖱️',
+  'remote_controls': '🎮',
+  'tablets': '📟',
+  'laptops': '💻',
+  'monitors': '🖥️',
+  'headphones': '🎧',
+  'speakers': '🔊',
+  'watches': '⌚',
+  'cameras': '📷',
+  'routers': '📡',
+  'printers': '🖨️',
+  'chargers': '🔌',
+};
+
+const categories = ref<{ key: string; name: string; icon: string }[]>([]);
+
+const loadCategories = async () => {
+  const result = await dbApi.getCategories();
+  if (result.success && result.data) {
+    categories.value = result.data.map((c: any) => ({
+      key: c.key,
+      name: c.name,
+      icon: iconMap[c.key] || '📦',
+    }));
+  }
+};
 
 const goToCompare = (category: string) => {
   router.push(`/compare/${category}`);
 };
+
+onMounted(() => {
+  loadCategories();
+});
 </script>
 
 <style scoped>
