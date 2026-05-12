@@ -236,8 +236,10 @@ async function getMetaFromDb() {
           existing = { scenario: c.scenario, chartType: c.chart_type, unit: c.unit || '', fields: [], labels: [] };
           acc.push(existing);
         }
-        existing.fields.push(c.field_name);
-        existing.labels.push(c.field_label);
+        if (c.field_name !== null && c.field_label !== null) {
+          existing.fields.push(c.field_name);
+          existing.labels.push(c.field_label);
+        }
         return acc;
       }, []);
 
@@ -349,11 +351,19 @@ async function initDatabase() {
       scenario VARCHAR(100) NOT NULL,
       scenario_order INT DEFAULT 0,
       chart_type VARCHAR(20) NOT NULL DEFAULT 'bar',
-      field_name VARCHAR(100) NOT NULL,
-      field_label VARCHAR(100) NOT NULL,
+      unit VARCHAR(20),
+      field_name VARCHAR(100),
+      field_label VARCHAR(100),
       field_order INT DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  await conn.query(`ALTER TABLE chart_config MODIFY COLUMN field_name VARCHAR(100), MODIFY COLUMN field_label VARCHAR(100)`);
+  try {
+    await conn.query(`ALTER TABLE chart_config ADD COLUMN unit VARCHAR(20)`);
+  } catch (e) {
+    if (!e.message.includes('Duplicate column name')) throw e;
+  }
 
   await conn.query(`
     CREATE TABLE IF NOT EXISTS image_mapping (
@@ -526,12 +536,20 @@ async function syncChartConfigToDb(categoryKey, chartConfigs) {
   await pool.query('DELETE FROM chart_config WHERE category_key = ? AND sheet_type = ?', [categoryKey, 'power']);
   for (let si = 0; si < chartConfigs.length; si++) {
     const cc = chartConfigs[si];
-    for (let fi = 0; fi < cc.fields.length; fi++) {
+    if (cc.fields.length === 0) {
       await pool.query(
-        `INSERT INTO chart_config (category_key, sheet_type, scenario, scenario_order, chart_type, unit, field_name, field_label, field_order)
-         VALUES (?, 'power', ?, ?, ?, ?, ?, ?, ?)`,
-        [categoryKey, cc.scenario, si, cc.chartType, cc.unit || null, cc.fields[fi], cc.labels[fi], fi]
+        `INSERT INTO chart_config (category_key, sheet_type, scenario, scenario_order, chart_type, unit)
+         VALUES (?, 'power', ?, ?, ?, ?)`,
+        [categoryKey, cc.scenario, si, cc.chartType, cc.unit || null]
       );
+    } else {
+      for (let fi = 0; fi < cc.fields.length; fi++) {
+        await pool.query(
+          `INSERT INTO chart_config (category_key, sheet_type, scenario, scenario_order, chart_type, unit, field_name, field_label, field_order)
+           VALUES (?, 'power', ?, ?, ?, ?, ?, ?, ?)`,
+          [categoryKey, cc.scenario, si, cc.chartType, cc.unit || null, cc.fields[fi], cc.labels[fi], fi]
+        );
+      }
     }
   }
 }
@@ -551,6 +569,7 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
       if (key === '功耗对比场景' || key === '场景' || key === '图表类型' || key === '单位') continue;
       if (!val || typeof val !== 'string') continue;
       const trimmedVal = val.trim();
+      if (trimmedVal === scenario) continue;
       const enName = cnToEnMap[trimmedVal];
       if (enName) {
         dataFields.push(enName);
@@ -558,7 +577,7 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
       }
     }
 
-    if (scenario && dataFields.length > 0) {
+    if (scenario) {
       configs.push({ scenario, chartType, unit, fields: dataFields, labels: dataLabels });
     }
   }

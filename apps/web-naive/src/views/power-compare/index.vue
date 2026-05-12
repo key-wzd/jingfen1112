@@ -67,22 +67,24 @@
                   v-for="product in selectedProducts"
                   :key="product.id"
                   class="legend-item"
-                  :class="{ inactive: hiddenProductIds.includes(product.id) }"
-                  @click="handleLegendToggle(product)"
+                  :class="{ inactive: rowHiddenIds[rowIndex]?.includes(product.id) }"
+                  @click="handleLegendToggle(rowIndex, product)"
                 >
-                  <span class="legend-color" :style="{ backgroundColor: hiddenProductIds.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                  <span class="legend-color" :style="{ backgroundColor: rowHiddenIds[rowIndex]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
                   <span class="legend-text">{{ getModelName(product) }}</span>
                 </div>
               </div>
             </div>
             <div class="row-charts">
-              <div v-for="config in row" :key="config.scenario" class="chart-wrapper">
+              <div v-for="config in row" :key="config.scenario" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+              <template v-if="!isConfigNull(config)">
                 <div class="chart-header">
                   <h4 class="scenario-name">{{ config.scenario }}</h4>
-                  <div class="unit-label">{{ unitLabel }}</div>
+                  <div class="unit-label">{{ config.unit || getUnitLabel() }}</div>
                 </div>
                 <div :id="`chart-${config.scenario}`" class="chart-content"></div>
-              </div>
+              </template>
+            </div>
             </div>
           </div>
         </div>
@@ -92,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, reactive } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import * as echarts from 'echarts';
 import { dbApi, type ChartConfigItem } from '#/api/db';
@@ -120,7 +122,7 @@ const chartConfigs = ref<ChartConfigItem[]>([]);
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
-const hiddenProductIds = ref<number[]>([]);
+const rowHiddenIds = reactive<Record<number, number[]>>({});
 const headerRows = ref<HeaderCell[][]>([]);
 
 const chartColors = [
@@ -130,7 +132,13 @@ const chartColors = [
   '#AB83A1', '#36827F', '#D4A373', '#588157',
 ];
 
-const unitLabel = computed(() => {
+const getUnitLabel = () => {
+  if (chartConfigs.value.length > 0) {
+    const configWithUnit = chartConfigs.value.find(c => c.unit && c.unit.trim());
+    if (configWithUnit) {
+      return configWithUnit.unit.trim();
+    }
+  }
   if (headerRows.value.length > 0) {
     const unitRow = headerRows.value.find(row => {
       const label = row[0]?.label || '';
@@ -144,11 +152,8 @@ const unitLabel = computed(() => {
       }
     }
   }
-  if (selectedProducts.value.length > 0) {
-    return selectedProducts.value[0]?.unit || 'mAH';
-  }
-  return 'mAH';
-});
+  return '';
+};
 
 const chartRows = computed(() => {
   const rows = [];
@@ -161,6 +166,20 @@ const chartRows = computed(() => {
 const selectedProducts = computed(() => {
   return allProducts.value.filter(p => selectedProductIds.value.includes(p.id));
 });
+
+const isConfigNull = (config: ChartConfigItem) => {
+  if (!config.fields || config.fields.length === 0) return true;
+  if (selectedProducts.value.length === 0) return true;
+  for (const product of selectedProducts.value) {
+    for (const field of config.fields) {
+      const val = product[field];
+      if (val !== undefined && val !== null && val !== '' && val !== 0) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
 
 const getProductIdByCol = (colIdx: number) => {
   return allProducts.value[colIdx]?.id ?? -1;
@@ -228,84 +247,102 @@ const handleProductToggle = (product: Product) => {
   const index = selectedProductIds.value.indexOf(product.id);
   if (index > -1) {
     selectedProductIds.value.splice(index, 1);
-    const hiddenIndex = hiddenProductIds.value.indexOf(product.id);
-    if (hiddenIndex > -1) {
-      hiddenProductIds.value.splice(hiddenIndex, 1);
+    for (const key of Object.keys(rowHiddenIds)) {
+      const hi = rowHiddenIds[key].indexOf(product.id);
+      if (hi > -1) rowHiddenIds[key].splice(hi, 1);
     }
   } else {
     selectedProductIds.value.push(product.id);
   }
 };
 
-const handleLegendToggle = (product: Product) => {
-  const index = hiddenProductIds.value.indexOf(product.id);
+const handleLegendToggle = (rowIndex: number, product: Product) => {
+  if (!rowHiddenIds[rowIndex]) rowHiddenIds[rowIndex] = [];
+  const index = rowHiddenIds[rowIndex].indexOf(product.id);
   if (index > -1) {
-    hiddenProductIds.value.splice(index, 1);
+    rowHiddenIds[rowIndex].splice(index, 1);
   } else {
-    hiddenProductIds.value.push(product.id);
+    rowHiddenIds[rowIndex].push(product.id);
   }
   createCharts();
 };
 
 const createCharts = () => {
-  chartConfigs.value.forEach((config) => {
-    const chartDom = document.getElementById(`chart-${config.scenario}`);
-    if (!chartDom) return;
-    const existingChart = echarts.getInstanceByDom(chartDom);
-    if (existingChart) existingChart.dispose();
-    const chart = echarts.init(chartDom);
-    const isHorizontal = config.chartType === 'barH';
-    const isLine = config.chartType === 'line';
+  const globalUnit = getUnitLabel();
 
-    const series = selectedProducts.value.map((product) => {
-      const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
-      const isHidden = hiddenProductIds.value.includes(product.id);
-      const displayColor = isHidden ? '#cccccc' : chartColors[colorIndex % chartColors.length];
-      const displayOpacity = isHidden ? 0.3 : 1;
-      const data = config.fields.map(field => {
-        if (isHidden) return null;
-        const val = product[field];
-        return typeof val === 'number' ? val : parseFloat(val) || 0;
-      });
+  chartRows.value.forEach((row, rowIndex) => {
+    row.forEach((config) => {
+      if (isConfigNull(config)) return;
 
-      if (isLine) {
+      const chartDom = document.getElementById(`chart-${config.scenario}`);
+      if (!chartDom) return;
+      const existingChart = echarts.getInstanceByDom(chartDom);
+      if (existingChart) existingChart.dispose();
+      const chart = echarts.init(chartDom);
+      const isHorizontal = config.chartType === 'barH';
+      const isLine = config.chartType === 'line';
+      const hiddenIds = rowHiddenIds[rowIndex] || [];
+      const unit = config.unit || globalUnit;
+
+      const series = selectedProducts.value.map((product) => {
+        const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
+        const isHidden = hiddenIds.includes(product.id);
+        const displayColor = isHidden ? '#cccccc' : chartColors[colorIndex % chartColors.length];
+        const displayOpacity = isHidden ? 0.3 : 1;
+        const data = config.fields.map(field => {
+          if (isHidden) return null;
+          const val = product[field];
+          return typeof val === 'number' ? val : parseFloat(val) || 0;
+        });
+
+        if (isLine) {
+          return {
+            name: getModelName(product),
+            type: 'line' as const,
+            data,
+            smooth: true,
+            itemStyle: { color: displayColor, opacity: displayOpacity },
+            lineStyle: { color: displayColor, opacity: displayOpacity },
+            areaStyle: isHidden ? undefined : { color: `rgba(${hexToRgb(chartColors[colorIndex % chartColors.length])},0.15)` },
+          };
+        }
         return {
           name: getModelName(product),
-          type: 'line' as const,
+          type: 'bar' as const,
           data,
-          smooth: true,
           itemStyle: { color: displayColor, opacity: displayOpacity },
-          lineStyle: { color: displayColor, opacity: displayOpacity },
-          areaStyle: isHidden ? undefined : { color: `rgba(${hexToRgb(chartColors[colorIndex % chartColors.length])},0.15)` },
+          label: {
+            show: !isHidden,
+            position: isHorizontal ? 'right' : 'top',
+            formatter: (params: any) => params.value != null ? params.value : '',
+            fontSize: 11,
+            color: '#666',
+          },
         };
+      });
+
+      const axisData = config.labels;
+
+      if (isHorizontal) {
+        chart.setOption({
+          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          legend: { show: false },
+          grid: { right: 60 },
+          yAxis: { type: 'category', data: axisData },
+          xAxis: { type: 'value', name: unit },
+          series,
+        });
+      } else {
+        chart.setOption({
+          tooltip: { trigger: 'axis', axisPointer: { type: isLine ? 'line' : 'shadow' } },
+          legend: { show: false },
+          grid: { top: 30 },
+          xAxis: { type: 'category', data: axisData },
+          yAxis: { type: 'value', name: unit },
+          series,
+        });
       }
-      return {
-        name: getModelName(product),
-        type: 'bar' as const,
-        data,
-        itemStyle: { color: displayColor, opacity: displayOpacity },
-      };
     });
-
-    const axisData = config.labels;
-
-    if (isHorizontal) {
-      chart.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        legend: { show: false },
-        yAxis: { type: 'category', data: axisData },
-        xAxis: { type: 'value', name: unitLabel.value },
-        series,
-      });
-    } else {
-      chart.setOption({
-        tooltip: { trigger: 'axis', axisPointer: { type: isLine ? 'line' : 'shadow' } },
-        legend: { show: false },
-        xAxis: { type: 'category', data: axisData },
-        yAxis: { type: 'value', name: unitLabel.value },
-        series,
-      });
-    }
   });
 };
 
@@ -325,7 +362,7 @@ watch(selectedProducts, () => {
 
 watch(category, () => {
   selectedProductIds.value = [];
-  hiddenProductIds.value = [];
+  Object.keys(rowHiddenIds).forEach(k => delete rowHiddenIds[k]);
   categoryName.value = '';
   chartConfigs.value = [];
   headerRows.value = [];
@@ -531,6 +568,23 @@ onMounted(() => {
 .chart-content {
   width: 100%;
   height: 300px;
+}
+
+.chart-empty {
+  width: 100%;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border: 1px dashed #ddd;
+  border-radius: 8px;
+  color: #bbb;
+  font-size: 0.95rem;
+}
+
+.chart-empty-wrapper {
+  visibility: hidden;
 }
 
 @media (max-width: 768px) {
