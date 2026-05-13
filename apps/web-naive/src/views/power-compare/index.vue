@@ -168,6 +168,7 @@ const selectedProducts = computed(() => {
 });
 
 const isConfigNull = (config: ChartConfigItem) => {
+  if (!config.scenario || config.scenario.toLowerCase() === 'null') return true;
   if (!config.fields || config.fields.length === 0) return true;
   if (selectedProducts.value.length === 0) return true;
   for (const product of selectedProducts.value) {
@@ -231,12 +232,26 @@ const loadProducts = async () => {
 
 const initSelectedFromQuery = () => {
   const selectedParam = route.query.selected as string;
-  if (selectedParam) {
+  if (selectedParam && allProducts.value.length > 0) {
     const pairs = decodeURIComponent(selectedParam).split(',');
     const ids: number[] = [];
     for (const pair of pairs) {
       const [brand, model] = pair.split('::');
-      const found = allProducts.value.find(p => p.brand === brand && p.model === model);
+      const trimmedBrand = (brand || '').trim();
+      const trimmedModel = (model || '').trim();
+      const found = allProducts.value.find(p => {
+        const pBrand = String(p.brand || '').trim();
+        const pModel = String(p.model || '').trim();
+        if (pBrand === trimmedBrand && pModel === trimmedModel) return true;
+        if (pBrand.includes(trimmedBrand) && pModel.includes(trimmedModel)) return true;
+        if (trimmedBrand.includes(pBrand) && trimmedModel.includes(pModel)) return true;
+        for (const key of Object.keys(p)) {
+          if (key === 'id' || key === 'created_at' || key === 'updated_at') continue;
+          const val = String(p[key] || '').trim();
+          if (val === trimmedModel) return true;
+        }
+        return false;
+      });
       if (found) ids.push(found.id);
     }
     selectedProductIds.value = ids;

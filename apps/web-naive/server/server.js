@@ -52,10 +52,17 @@ function cnToEnField(cnName) {
   const pinyinMap = {
     '图片': 'image', '屏幕': 'screen', '处理器': 'processor', '内存': 'ram',
     '存储': 'storage', '摄像头': 'camera', '电池': 'battery', '价格': 'price',
-    '电池容量': 'battery_capacity', '视频播放功耗': 'video_power', '游戏功耗': 'game_power',
-    '待机功耗': 'standby_power', '浏览网页功耗': 'browser_power', '睡眠功耗': 'sleep_power',
-    '休眠功耗': 'dormancy_power', '使用功耗': 'usage_power', '功耗对比场景': 'power_scenario',
+    '电池容量': 'battery_capacity', 
+    '视频播放功耗': 'video_power', '视频播放': 'video_power',
+    '游戏功耗': 'game_power', '游戏': 'game_power',
+    '待机功耗': 'standby_power', '待机': 'standby_power',
+    '浏览网页功耗': 'browser_power', '浏览网页': 'browser_power',
+    '睡眠功耗': 'sleep_power', '睡眠': 'sleep_power',
+    '休眠功耗': 'dormancy_power', '休眠': 'dormancy_power',
+    '使用功耗': 'usage_power', '使用': 'usage_power',
+    '功耗对比场景': 'power_scenario', '场景': 'power_scenario',
     '图表类型': 'chart_type', '单位': 'unit',
+    '公司': 'company', '品牌': 'brand', '型号': 'model',
   };
   if (pinyinMap[cnName]) return pinyinMap[cnName];
   return cnName
@@ -569,7 +576,6 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
       if (key === '功耗对比场景' || key === '场景' || key === '图表类型' || key === '单位') continue;
       if (!val || typeof val !== 'string') continue;
       const trimmedVal = val.trim();
-      if (trimmedVal === scenario) continue;
       const enName = cnToEnMap[trimmedVal];
       if (enName) {
         dataFields.push(enName);
@@ -584,7 +590,7 @@ function parseChartConfigFromRows(rows, cnToEnMap) {
   return configs;
 }
 
-async function importSheetData(tableName, records, fieldTypes, imageMap) {
+async function importSheetData(tableName, records, fieldTypes, imageMap, headerRowsData) {
   if (records.length === 0) return { success: 0, fail: 0 };
 
   const cnFieldNames = Object.keys(fieldTypes);
@@ -595,13 +601,34 @@ async function importSheetData(tableName, records, fieldTypes, imageMap) {
   const insertCols = ['brand', 'model', ...nonKeyEnNames];
   const placeholders = insertCols.map(() => '?').join(', ');
 
+  let headerBrandRow = null;
+  let headerModelRow = null;
+  if (headerRowsData && headerRowsData.length >= 2) {
+    for (const row of headerRowsData) {
+      if (row[0]?.label === '品牌' || row[0]?.label?.includes('品牌')) {
+        headerBrandRow = row;
+      }
+      if (row[0]?.label === '型号' || row[0]?.label?.includes('型号')) {
+        headerModelRow = row;
+      }
+    }
+  }
+
   let successCount = 0;
   let failCount = 0;
 
-  for (const row of records) {
+  for (let ri = 0; ri < records.length; ri++) {
       try {
-        const brand = row['品牌'] || '';
-        const model = row['型号'] || '';
+        const row = records[ri];
+        let brand = row['品牌'] || '';
+        let model = row['型号'] || '';
+
+        if (!brand && headerBrandRow && ri + 1 < headerBrandRow.length) {
+          brand = headerBrandRow[ri + 1]?.value || '';
+        }
+        if (!model && headerModelRow && ri + 1 < headerModelRow.length) {
+          model = headerModelRow[ri + 1]?.value || '';
+        }
 
         const values = [brand, model];
       for (const cnName of nonKeyCnNames) {
@@ -868,7 +895,7 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
           if (records.length > 0) {
             const dbImageMap = await getImageMapFromDb(categoryKey);
             const mergedImageMap = { ...imageMap, ...dbImageMap };
-            const importResult = await importSheetData(tableName, records, fieldTypes, mergedImageMap);
+            const importResult = await importSheetData(tableName, records, fieldTypes, mergedImageMap, headerRows);
 
             results[`${categoryKey}_${sheetParsed.type}`] = {
               sheetName,
@@ -1105,7 +1132,7 @@ async function loadFromTemplateOnFirstRun() {
 
     const dbImageMap = await getImageMapFromDb(categoryKey);
     const mergedImageMap = { ...imageMap, ...dbImageMap };
-    await importSheetData(tableName, records, fieldTypes, mergedImageMap);
+    await importSheetData(tableName, records, fieldTypes, mergedImageMap, headerRows);
     console.log(`已从模板加载 ${parsed.categoryName} ${parsed.type} 数据`);
   }
 
