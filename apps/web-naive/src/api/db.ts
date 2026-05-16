@@ -54,6 +54,7 @@ export interface ChartConfigItem {
   scenario: string;
   chartType: 'bar' | 'barH' | 'line' | 'pie' | 'radar';
   unit?: string;
+  order: number;
   fields: string[];
   labels: string[];
 }

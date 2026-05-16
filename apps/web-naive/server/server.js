@@ -238,9 +238,9 @@ async function getMetaFromDb() {
     const sheetCharts = charts
       .filter(c => c.category_key === s.category_key && c.sheet_type === s.sheet_type)
       .reduce((acc, c) => {
-        let existing = acc.find(a => a.scenario === c.scenario);
+        let existing = acc.find(a => a.order === c.scenario_order);
         if (!existing) {
-          existing = { scenario: c.scenario, chartType: c.chart_type, unit: c.unit || '', fields: [], labels: [] };
+          existing = { scenario: c.scenario, chartType: c.chart_type, unit: c.unit || '', order: c.scenario_order, fields: [], labels: [] };
           acc.push(existing);
         }
         if (c.field_name !== null && c.field_label !== null) {

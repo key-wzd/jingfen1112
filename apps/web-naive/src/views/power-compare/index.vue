@@ -76,13 +76,12 @@
               </div>
             </div>
             <div class="row-charts">
-              <div v-for="config in row" :key="config.scenario" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+              <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
               <template v-if="!isConfigNull(config)">
                 <div class="chart-header">
                   <h4 class="scenario-name">{{ config.scenario }}</h4>
-                  <div class="unit-label">{{ config.unit || getUnitLabel() }}</div>
                 </div>
-                <div :id="`chart-${config.scenario}`" class="chart-content"></div>
+                <div :id="`chart-${config.order}`" class="chart-content"></div>
               </template>
             </div>
             </div>
@@ -183,19 +182,30 @@ const isConfigNull = (config: ChartConfigItem) => {
 };
 
 const getProductIdByCol = (colIdx: number) => {
+  if (headerRows.value.length >= 2) {
+    const modelCell = headerRows.value[1]?.[colIdx + 1];
+    if (modelCell) {
+      const qModel = String(modelCell.value || '').trim();
+      const found = allProducts.value.find(p => String(p.model || '').trim() === qModel);
+      if (found) return found.id;
+    }
+  }
   return allProducts.value[colIdx]?.id ?? -1;
 };
 
 const handleProductToggleByCol = (colIdx: number) => {
-  const product = allProducts.value[colIdx];
+  const productId = getProductIdByCol(colIdx);
+  const product = allProducts.value.find(p => p.id === productId);
   if (product) {
     handleProductToggle(product);
   }
 };
 
 const getProductColor = (product: Product) => {
-  const index = allProducts.value.findIndex(p => p.id === product.id);
-  return chartColors[index % chartColors.length];
+  const index = selectedProductIds.value.indexOf(product.id);
+  if (index >= 0) return chartColors[index % chartColors.length];
+  const fallbackIndex = allProducts.value.findIndex(p => p.id === product.id);
+  return chartColors[fallbackIndex % chartColors.length];
 };
 
 const getModelName = (product: Product) => {
@@ -232,30 +242,21 @@ const loadProducts = async () => {
 
 const initSelectedFromQuery = () => {
   const selectedParam = route.query.selected as string;
-  if (selectedParam && allProducts.value.length > 0) {
-    const pairs = decodeURIComponent(selectedParam).split(',');
-    const ids: number[] = [];
-    for (const pair of pairs) {
-      const [brand, model] = pair.split('::');
-      const trimmedBrand = (brand || '').trim();
-      const trimmedModel = (model || '').trim();
-      const found = allProducts.value.find(p => {
-        const pBrand = String(p.brand || '').trim();
-        const pModel = String(p.model || '').trim();
-        if (pBrand === trimmedBrand && pModel === trimmedModel) return true;
-        if (pBrand.includes(trimmedBrand) && pModel.includes(trimmedModel)) return true;
-        if (trimmedBrand.includes(pBrand) && trimmedModel.includes(pModel)) return true;
-        for (const key of Object.keys(p)) {
-          if (key === 'id' || key === 'created_at' || key === 'updated_at') continue;
-          const val = String(p[key] || '').trim();
-          if (val === trimmedModel) return true;
-        }
-        return false;
-      });
-      if (found) ids.push(found.id);
-    }
-    selectedProductIds.value = ids;
+  if (!selectedParam || allProducts.value.length === 0) return;
+
+  const pairs = decodeURIComponent(selectedParam).split(',');
+  const ids: number[] = [];
+
+  for (const pair of pairs) {
+    const [brand, model] = pair.split('::');
+    const qModel = (model || '').trim();
+    if (!qModel) continue;
+
+    const found = allProducts.value.find(p => String(p.model || '').trim() === qModel);
+    if (found) ids.push(found.id);
   }
+
+  selectedProductIds.value = ids;
 };
 
 const handleProductToggle = (product: Product) => {
@@ -289,7 +290,7 @@ const createCharts = () => {
     row.forEach((config) => {
       if (isConfigNull(config)) return;
 
-      const chartDom = document.getElementById(`chart-${config.scenario}`);
+      const chartDom = document.getElementById(`chart-${config.order}`);
       if (!chartDom) return;
       const existingChart = echarts.getInstanceByDom(chartDom);
       if (existingChart) existingChart.dispose();
@@ -300,9 +301,8 @@ const createCharts = () => {
       const unit = config.unit || globalUnit;
 
       const series = selectedProducts.value.map((product) => {
-        const colorIndex = allProducts.value.findIndex(p => p.id === product.id);
         const isHidden = hiddenIds.includes(product.id);
-        const displayColor = isHidden ? '#cccccc' : chartColors[colorIndex % chartColors.length];
+        const displayColor = isHidden ? '#cccccc' : getProductColor(product);
         const displayOpacity = isHidden ? 0.3 : 1;
         const data = config.fields.map(field => {
           if (isHidden) return null;
@@ -318,7 +318,6 @@ const createCharts = () => {
             smooth: true,
             itemStyle: { color: displayColor, opacity: displayOpacity },
             lineStyle: { color: displayColor, opacity: displayOpacity },
-            areaStyle: isHidden ? undefined : { color: `rgba(${hexToRgb(chartColors[colorIndex % chartColors.length])},0.15)` },
           };
         }
         return {
@@ -337,37 +336,31 @@ const createCharts = () => {
       });
 
       const axisData = config.labels;
+      const axisNameStyle = { fontWeight: 'bold' as const, fontSize: 13 };
+      const axisLabelStyle = { fontWeight: 'bold' as const };
 
       if (isHorizontal) {
         chart.setOption({
-          tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+          tooltip: { show: false },
           legend: { show: false },
           grid: { right: 60 },
-          yAxis: { type: 'category', data: axisData },
-          xAxis: { type: 'value', name: unit },
+          yAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
+          xAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
           series,
         });
       } else {
         chart.setOption({
-          tooltip: { trigger: 'axis', axisPointer: { type: isLine ? 'line' : 'shadow' } },
+          tooltip: { show: false },
           legend: { show: false },
           grid: { top: 30 },
-          xAxis: { type: 'category', data: axisData },
-          yAxis: { type: 'value', name: unit },
+          xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
+          yAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
           series,
         });
       }
     });
   });
 };
-
-function hexToRgb(hex: string) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (result) {
-    return `${parseInt(result[1], 16)},${parseInt(result[2], 16)},${parseInt(result[3], 16)}`;
-  }
-  return '102,126,234';
-}
 
 watch(selectedProducts, () => {
   if (selectedProducts.value.length > 0) {
@@ -570,32 +563,14 @@ onMounted(() => {
 
 .scenario-name {
   font-size: 1rem;
-  margin: 0 0 4px;
+  margin: 0;
   color: #333;
   font-weight: 600;
-}
-
-.unit-label {
-  font-size: 0.85rem;
-  color: #666;
 }
 
 .chart-content {
   width: 100%;
   height: 300px;
-}
-
-.chart-empty {
-  width: 100%;
-  height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fafafa;
-  border: 1px dashed #ddd;
-  border-radius: 8px;
-  color: #bbb;
-  font-size: 0.95rem;
 }
 
 .chart-empty-wrapper {
