@@ -80,6 +80,9 @@
               <template v-if="!isConfigNull(config)">
                 <div class="chart-header">
                   <h4 class="scenario-name">{{ config.scenario }}</h4>
+                  <div v-if="getTestConclusion(config, rowIndex)" class="test-conclusion">
+                    测试结论：{{ getTestConclusion(config, rowIndex) }}
+                  </div>
                 </div>
                 <div :id="`chart-${config.order}`" class="chart-content"></div>
               </template>
@@ -216,6 +219,30 @@ const getModelName = (product: Product) => {
     }
   }
   return product.model || `${product.brand} ${product.model}`;
+};
+
+const getTestConclusion = (config: ChartConfigItem, rowIndex: number) => {
+  if (!config.fields || config.fields.length === 0) return '';
+  if (selectedProducts.value.length <= 1) return '';
+
+  const hiddenIds = rowHiddenIds[rowIndex] || [];
+
+  const productsWithPower = selectedProducts.value
+    .filter(p => !hiddenIds.includes(p.id))
+    .map(product => {
+      const totalPower = config.fields.reduce((sum, field) => {
+        const val = product[field];
+        return sum + (typeof val === 'number' ? val : parseFloat(val) || 0);
+      }, 0);
+      return { product, totalPower };
+    })
+    .filter(item => item.totalPower > 0)
+    .sort((a, b) => a.totalPower - b.totalPower)
+    .slice(0, 8);
+
+  if (productsWithPower.length <= 1) return '';
+
+  return productsWithPower.map(item => getModelName(item.product)).join(' < ');
 };
 
 const loadCategoryConfig = async () => {
@@ -566,6 +593,14 @@ onMounted(() => {
   margin: 0;
   color: #333;
   font-weight: 600;
+}
+
+.test-conclusion {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 6px;
+  font-weight: 400;
+  text-align: center;
 }
 
 .chart-content {
