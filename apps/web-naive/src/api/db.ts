@@ -57,6 +57,7 @@ export interface ChartConfigItem {
   order: number;
   fields: string[];
   labels: string[];
+  conclusion?: string;
 }
 
 export interface DisplayColumn {

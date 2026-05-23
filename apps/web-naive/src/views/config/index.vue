@@ -11,7 +11,7 @@
         <div class="import-area">
           <div class="template-download">
             <p>请使用标准模板填写数据后上传：</p>
-            <button class="btn btn-outline" @click="downloadTemplate">下载模板 (gh.xlsx)</button>
+            <button class="btn btn-outline" @click="downloadTemplate">下载模板</button>
           </div>
           <div class="file-upload">
             <input

@@ -92,11 +92,15 @@
         </div>
       </section>
     </div>
+
+    <transition name="fade">
+      <button v-if="showBackToTop" class="back-to-top" @click="scrollToTop">╱╲</button>
+    </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, reactive } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import * as echarts from 'echarts';
 import { dbApi, type ChartConfigItem } from '#/api/db';
@@ -222,22 +226,29 @@ const getModelName = (product: Product) => {
 };
 
 const getTestConclusion = (config: ChartConfigItem, rowIndex: number) => {
+  if (config.conclusion && config.conclusion.trim()) {
+    return config.conclusion.trim();
+  }
+
   if (!config.fields || config.fields.length === 0) return '';
   if (selectedProducts.value.length <= 1) return '';
 
   const hiddenIds = rowHiddenIds[rowIndex] || [];
+  const isLine = config.chartType === 'line';
 
   const productsWithPower = selectedProducts.value
     .filter(p => !hiddenIds.includes(p.id))
     .map(product => {
-      const totalPower = config.fields.reduce((sum, field) => {
+      const values = config.fields.map(field => {
         const val = product[field];
-        return sum + (typeof val === 'number' ? val : parseFloat(val) || 0);
-      }, 0);
-      return { product, totalPower };
+        return typeof val === 'number' ? val : parseFloat(val) || 0;
+      });
+      const totalPower = values.reduce((sum, v) => sum + v, 0);
+      const avgPower = isLine ? totalPower / values.length : totalPower;
+      return { product, powerValue: avgPower };
     })
-    .filter(item => item.totalPower > 0)
-    .sort((a, b) => a.totalPower - b.totalPower)
+    .filter(item => item.powerValue > 0)
+    .sort((a, b) => a.powerValue - b.powerValue)
     .slice(0, 8);
 
   if (productsWithPower.length <= 1) return '';
@@ -389,6 +400,18 @@ const createCharts = () => {
   });
 };
 
+const showBackToTop = ref(false);
+
+const handleScroll = () => {
+  const scrollTop = window.scrollY || document.documentElement.scrollTop;
+  const screenHeight = window.innerHeight;
+  showBackToTop.value = scrollTop > screenHeight * 2;
+};
+
+const scrollToTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 watch(selectedProducts, () => {
   if (selectedProducts.value.length > 0) {
     setTimeout(createCharts, 100);
@@ -408,6 +431,11 @@ watch(category, () => {
 onMounted(() => {
   loadCategoryConfig();
   loadProducts();
+  window.addEventListener('scroll', handleScroll);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
 });
 </script>
 
@@ -597,9 +625,9 @@ onMounted(() => {
 
 .test-conclusion {
   font-size: 0.85rem;
-  color: #666;
-  margin-top: 6px;
-  font-weight: 400;
+  color: #8a8a8aff;
+  margin-top: 16px;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -610,6 +638,42 @@ onMounted(() => {
 
 .chart-empty-wrapper {
   visibility: hidden;
+}
+
+.back-to-top {
+  position: fixed;
+  right: 500px;
+  bottom: 500px;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: #b3b4b6ff;
+  color: white;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-to-top:hover {
+  background: #5a6fd6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 768px) {
