@@ -388,71 +388,8 @@ const createCharts = () => {
       };
 
       if (isLine) {
-        const hoveredSeriesIdx = { value: 0 };
-        const chartDom = chart.getDom();
-
-        chart.getZr().on('mousemove', (e: any) => {
-          try {
-            const rect = chartDom.getBoundingClientRect();
-            const mouseX = e.event?.clientX || e.offsetX;
-            const mouseY = e.event?.clientY || e.offsetY;
-            const x = mouseX - rect.left;
-            const y = mouseY - rect.top;
-
-            if (!chart.containPixel('grid', [x, y])) {
-              hoveredSeriesIdx.value = -1;
-              return;
-            }
-
-            const [dataX] = chart.convertFromPixel('grid', [x, y]);
-            const xIdx = Math.max(0, Math.min(Math.round(dataX), axisData.length - 1));
-
-            let minDist = Infinity;
-            let closestIdx = 0;
-
-            series.forEach((s: any, idx: number) => {
-              if (s.data[xIdx] != null && s.data[xIdx] !== undefined) {
-                const [, lineY] = chart.convertToPixel('grid', [xIdx, s.data[xIdx]]);
-                const dist = Math.abs(y - lineY);
-                if (dist < minDist) {
-                  minDist = dist;
-                  closestIdx = idx;
-                }
-              }
-            });
-
-            hoveredSeriesIdx.value = closestIdx;
-          } catch {}
-        });
-
         chart.setOption({
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: {
-              type: 'line',
-              lineStyle: { color: '#999', width: 1, type: 'dashed' },
-            },
-            formatter: (params: any) => {
-              const items = Array.isArray(params) ? params : [params];
-              const idx = hoveredSeriesIdx.value;
-              
-              if (idx >= 0 && idx < items.length) {
-                const item = items[idx];
-                if (item && item.value != null) {
-                  return `<div style="font-weight:600">${item.seriesName}</div>
-                    <div>${item.name}: ${item.value}${unit ? ' ' + unit : ''}</div>`;
-                }
-              }
-              
-              const firstValid = items.find((i: any) => i.value != null);
-              if (firstValid) {
-                return `<div style="font-weight:600">${firstValid.seriesName}</div>
-                  <div>${firstValid.name}: ${firstValid.value}${unit ? ' ' + unit : ''}</div>`;
-              }
-              
-              return '';
-            },
-          },
+          tooltip: barTooltip,
           legend: { show: false },
           grid: { top: 30 },
           xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
