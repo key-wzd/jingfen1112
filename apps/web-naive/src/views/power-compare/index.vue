@@ -354,6 +354,7 @@ const createCharts = () => {
             type: 'line' as const,
             data,
             smooth: true,
+            triggerLineEvent: true,
             itemStyle: { color: displayColor, opacity: displayOpacity },
             lineStyle: { color: displayColor, opacity: displayOpacity },
           };
@@ -377,9 +378,90 @@ const createCharts = () => {
       const axisNameStyle = { fontWeight: 'bold' as const, fontSize: 13 };
       const axisLabelStyle = { fontWeight: 'bold' as const };
 
-      if (isHorizontal) {
+      const barTooltip = {
+        trigger: 'item' as const,
+        formatter: (params: any) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          return `<div style="font-weight:600">${p.seriesName}</div>
+            <div>${p.name}: ${p.value != null ? p.value : '-'}${unit ? ' ' + unit : ''}</div>`;
+        },
+      };
+
+      if (isLine) {
+        const hoveredSeriesIdx = { value: 0 };
+        const chartDom = chart.getDom();
+
+        chart.getZr().on('mousemove', (e: any) => {
+          try {
+            const rect = chartDom.getBoundingClientRect();
+            const mouseX = e.event?.clientX || e.offsetX;
+            const mouseY = e.event?.clientY || e.offsetY;
+            const x = mouseX - rect.left;
+            const y = mouseY - rect.top;
+
+            if (!chart.containPixel('grid', [x, y])) {
+              hoveredSeriesIdx.value = -1;
+              return;
+            }
+
+            const [dataX] = chart.convertFromPixel('grid', [x, y]);
+            const xIdx = Math.max(0, Math.min(Math.round(dataX), axisData.length - 1));
+
+            let minDist = Infinity;
+            let closestIdx = 0;
+
+            series.forEach((s: any, idx: number) => {
+              if (s.data[xIdx] != null && s.data[xIdx] !== undefined) {
+                const [, lineY] = chart.convertToPixel('grid', [xIdx, s.data[xIdx]]);
+                const dist = Math.abs(y - lineY);
+                if (dist < minDist) {
+                  minDist = dist;
+                  closestIdx = idx;
+                }
+              }
+            });
+
+            hoveredSeriesIdx.value = closestIdx;
+          } catch {}
+        });
+
         chart.setOption({
-          tooltip: { show: false },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'line',
+              lineStyle: { color: '#999', width: 1, type: 'dashed' },
+            },
+            formatter: (params: any) => {
+              const items = Array.isArray(params) ? params : [params];
+              const idx = hoveredSeriesIdx.value;
+              
+              if (idx >= 0 && idx < items.length) {
+                const item = items[idx];
+                if (item && item.value != null) {
+                  return `<div style="font-weight:600">${item.seriesName}</div>
+                    <div>${item.name}: ${item.value}${unit ? ' ' + unit : ''}</div>`;
+                }
+              }
+              
+              const firstValid = items.find((i: any) => i.value != null);
+              if (firstValid) {
+                return `<div style="font-weight:600">${firstValid.seriesName}</div>
+                  <div>${firstValid.name}: ${firstValid.value}${unit ? ' ' + unit : ''}</div>`;
+              }
+              
+              return '';
+            },
+          },
+          legend: { show: false },
+          grid: { top: 30 },
+          xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
+          yAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
+          series,
+        });
+      } else if (isHorizontal) {
+        chart.setOption({
+          tooltip: barTooltip,
           legend: { show: false },
           grid: { right: 60 },
           yAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
@@ -388,7 +470,7 @@ const createCharts = () => {
         });
       } else {
         chart.setOption({
-          tooltip: { show: false },
+          tooltip: barTooltip,
           legend: { show: false },
           grid: { top: 30 },
           xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
@@ -409,7 +491,18 @@ const handleScroll = () => {
 };
 
 const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const startPosition = window.scrollY;
+  if (startPosition === 0) return;
+  const duration = 100;
+  const startTime = Date.now();
+  const timer = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    window.scrollTo(0, startPosition * (1 - progress));
+    if (progress >= 1) {
+      clearInterval(timer);
+    }
+  }, 10);
 };
 
 watch(selectedProducts, () => {
