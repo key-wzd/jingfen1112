@@ -58,6 +58,8 @@ export interface ChartConfigItem {
   fields: string[];
   labels: string[];
   conclusion?: string;
+  section?: string;
+  renderType?: string;
 }
 
 export interface DisplayColumn {

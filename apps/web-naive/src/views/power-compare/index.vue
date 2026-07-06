@@ -60,33 +60,72 @@
 
       <section v-if="selectedProducts.length > 0" class="charts-section">
         <div class="charts-grid">
-          <div v-for="(row, rowIndex) in chartRows" :key="rowIndex" class="chart-row">
+          <!-- 总结场景（始终置顶，独占整行） -->
+          <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-row">
             <div class="row-legend">
               <div class="legend-container">
                 <div
                   v-for="product in selectedProducts"
                   :key="product.id"
                   class="legend-item"
-                  :class="{ inactive: rowHiddenIds[rowIndex]?.includes(product.id) }"
-                  @click="handleLegendToggle(rowIndex, product)"
+                  :class="{ inactive: rowHiddenIds['summary-' + idx]?.includes(product.id) }"
+                  @click="handleLegendToggle('summary-' + idx, product)"
                 >
-                  <span class="legend-color" :style="{ backgroundColor: rowHiddenIds[rowIndex]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                  <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['summary-' + idx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
                   <span class="legend-text">{{ getModelName(product) }}</span>
                 </div>
               </div>
             </div>
-            <div class="row-charts">
-              <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
-              <template v-if="!isConfigNull(config)">
-                <div class="chart-header">
-                  <h4 class="scenario-name">{{ config.scenario }}</h4>
-                  <div v-if="getTestConclusion(config, rowIndex)" class="test-conclusion">
-                    测试结论：{{ getTestConclusion(config, rowIndex) }}
+            <div class="row-charts row-charts--summary">
+              <div class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+                <template v-if="!isConfigNull(config)">
+                  <div class="chart-header">
+                    <h4 class="scenario-name">{{ config.scenario }}</h4>
+                    <div v-if="getTestConclusion(config, 'summary-' + idx)" class="test-conclusion">
+                      测试结论：{{ getTestConclusion(config, 'summary-' + idx) }}
+                    </div>
+                  </div>
+                  <div :id="`chart-${config.order}`" class="chart-content"></div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- 基于 section 的区域分组 -->
+          <div
+            v-for="(group, groupIdx) in sectionGroups"
+            :key="'section-' + groupIdx"
+            class="section-group"
+            :class="{ 'section-group--highlighted': !!group.section }"
+          >
+            <div v-for="(row, rowIdx) in group.rows" :key="'row-' + groupIdx + '-' + rowIdx" class="chart-row">
+              <div class="row-legend">
+                <div class="legend-container">
+                  <div
+                    v-for="product in selectedProducts"
+                    :key="product.id"
+                    class="legend-item"
+                    :class="{ inactive: rowHiddenIds['sec-' + groupIdx + '-' + rowIdx]?.includes(product.id) }"
+                    @click="handleLegendToggle('sec-' + groupIdx + '-' + rowIdx, product)"
+                  >
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['sec-' + groupIdx + '-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-text">{{ getModelName(product) }}</span>
                   </div>
                 </div>
-                <div :id="`chart-${config.order}`" class="chart-content"></div>
-              </template>
-            </div>
+              </div>
+              <div class="row-charts">
+                <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+                  <template v-if="!isConfigNull(config)">
+                    <div class="chart-header">
+                      <h4 class="scenario-name">{{ config.scenario }}</h4>
+                      <div v-if="getTestConclusion(config, 'sec-' + groupIdx + '-' + rowIdx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'sec-' + groupIdx + '-' + rowIdx) }}
+                      </div>
+                    </div>
+                    <div :id="`chart-${config.order}`" class="chart-content"></div>
+                  </template>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -128,7 +167,7 @@ const chartConfigs = ref<ChartConfigItem[]>([]);
 const allProducts = ref<Product[]>([]);
 const loading = ref(false);
 const selectedProductIds = ref<number[]>([]);
-const rowHiddenIds = reactive<Record<number, number[]>>({});
+const rowHiddenIds = reactive<Record<string, number[]>>({});
 const headerRows = ref<HeaderCell[][]>([]);
 
 const chartColors = [
@@ -161,11 +200,73 @@ const getUnitLabel = () => {
   return '';
 };
 
-const chartRows = computed(() => {
-  const rows = [];
-  for (let i = 0; i < chartConfigs.value.length; i += 2) {
-    rows.push(chartConfigs.value.slice(i, i + 2));
+// 判断是否为总结场景
+const isSummary = (config: ChartConfigItem) => {
+  return config.scenario === '总结' || config.renderType === 'summary';
+};
+
+// 总结场景项（始终置顶）
+const summaryItems = computed(() => {
+  return chartConfigs.value.filter(isSummary);
+});
+
+// 普通场景项
+const normalItems = computed(() => {
+  return chartConfigs.value.filter(c => !isSummary(c));
+});
+
+// 区域分组（基于 section 字段连续分组）
+interface SectionGroup {
+  section: string | undefined;
+  rows: ChartConfigItem[][];
+}
+
+const sectionGroups = computed(() => {
+  const groups: SectionGroup[] = [];
+  let currentSection: string | undefined = undefined;
+  let currentItems: ChartConfigItem[] = [];
+
+  for (const item of normalItems.value) {
+    const itemSection = item.section;
+    if (itemSection !== currentSection) {
+      if (currentItems.length > 0) {
+        const rows: ChartConfigItem[][] = [];
+        for (let i = 0; i < currentItems.length; i += 2) {
+          rows.push(currentItems.slice(i, i + 2));
+        }
+        groups.push({ section: currentSection, rows });
+      }
+      currentSection = itemSection;
+      currentItems = [item];
+    } else {
+      currentItems.push(item);
+    }
   }
+  if (currentItems.length > 0) {
+    const rows: ChartConfigItem[][] = [];
+    for (let i = 0; i < currentItems.length; i += 2) {
+      rows.push(currentItems.slice(i, i + 2));
+    }
+    groups.push({ section: currentSection, rows });
+  }
+
+  return groups;
+});
+
+// 所有渲染行（用于 createCharts 遍历）
+const allChartRows = computed(() => {
+  const rows: { key: string; items: ChartConfigItem[] }[] = [];
+
+  summaryItems.value.forEach((item, idx) => {
+    rows.push({ key: `summary-${idx}`, items: [item] });
+  });
+
+  sectionGroups.value.forEach((group, groupIdx) => {
+    group.rows.forEach((rowItems, rowIdx) => {
+      rows.push({ key: `sec-${groupIdx}-${rowIdx}`, items: rowItems });
+    });
+  });
+
   return rows;
 });
 
@@ -225,7 +326,7 @@ const getModelName = (product: Product) => {
   return product.model || `${product.brand} ${product.model}`;
 };
 
-const getTestConclusion = (config: ChartConfigItem, rowIndex: number) => {
+const getTestConclusion = (config: ChartConfigItem, rowKey: string) => {
   if (config.conclusion && config.conclusion.trim()) {
     return config.conclusion.trim();
   }
@@ -233,7 +334,7 @@ const getTestConclusion = (config: ChartConfigItem, rowIndex: number) => {
   if (!config.fields || config.fields.length === 0) return '';
   if (selectedProducts.value.length <= 1) return '';
 
-  const hiddenIds = rowHiddenIds[rowIndex] || [];
+  const hiddenIds = rowHiddenIds[rowKey] || [];
   const isLine = config.chartType === 'line';
 
   const productsWithPower = selectedProducts.value
@@ -310,13 +411,13 @@ const handleProductToggle = (product: Product) => {
   }
 };
 
-const handleLegendToggle = (rowIndex: number, product: Product) => {
-  if (!rowHiddenIds[rowIndex]) rowHiddenIds[rowIndex] = [];
-  const index = rowHiddenIds[rowIndex].indexOf(product.id);
+const handleLegendToggle = (rowKey: string, product: Product) => {
+  if (!rowHiddenIds[rowKey]) rowHiddenIds[rowKey] = [];
+  const index = rowHiddenIds[rowKey].indexOf(product.id);
   if (index > -1) {
-    rowHiddenIds[rowIndex].splice(index, 1);
+    rowHiddenIds[rowKey].splice(index, 1);
   } else {
-    rowHiddenIds[rowIndex].push(product.id);
+    rowHiddenIds[rowKey].push(product.id);
   }
   createCharts();
 };
@@ -324,8 +425,8 @@ const handleLegendToggle = (rowIndex: number, product: Product) => {
 const createCharts = () => {
   const globalUnit = getUnitLabel();
 
-  chartRows.value.forEach((row, rowIndex) => {
-    row.forEach((config) => {
+  allChartRows.value.forEach(({ key, items }) => {
+    items.forEach((config) => {
       if (isConfigNull(config)) return;
 
       const chartDom = document.getElementById(`chart-${config.order}`);
@@ -335,7 +436,7 @@ const createCharts = () => {
       const chart = echarts.init(chartDom);
       const isHorizontal = config.chartType === 'barH';
       const isLine = config.chartType === 'line';
-      const hiddenIds = rowHiddenIds[rowIndex] || [];
+      const hiddenIds = rowHiddenIds[key] || [];
       const unit = config.unit || globalUnit;
 
       const series = selectedProducts.value.map((product) => {
@@ -632,6 +733,22 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 24px;
+}
+
+.row-charts--summary {
+  grid-template-columns: 1fr !important;
+}
+
+.section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section-group--highlighted {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  padding: 16px;
 }
 
 .chart-wrapper {
