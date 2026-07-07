@@ -59,34 +59,39 @@
       </section>
 
       <section v-if="selectedProducts.length > 0" class="charts-section">
+        <div class="charts-section-header">
+          <h3 class="charts-section-title">XXXXXX</h3>
+        </div>
         <div class="charts-grid">
           <!-- 总结场景（始终置顶，独占整行） -->
-          <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-row">
-            <div class="row-legend">
-              <div class="legend-container">
-                <div
-                  v-for="product in selectedProducts"
-                  :key="product.id"
-                  class="legend-item"
-                  :class="{ inactive: rowHiddenIds['summary-' + idx]?.includes(product.id) }"
-                  @click="handleLegendToggle('summary-' + idx, product)"
-                >
-                  <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['summary-' + idx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
-                  <span class="legend-text">{{ getModelName(product) }}</span>
+          <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-card">
+            <div class="chart-row">
+              <div class="row-legend">
+                <div class="legend-container">
+                  <div
+                    v-for="product in selectedProducts"
+                    :key="product.id"
+                    class="legend-item"
+                    :class="{ inactive: rowHiddenIds['summary-' + idx]?.includes(product.id) }"
+                    @click="handleLegendToggle('summary-' + idx, product)"
+                  >
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['summary-' + idx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-text">{{ getModelName(product) }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="row-charts row-charts--summary">
-              <div class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
-                <template v-if="!isConfigNull(config)">
-                  <div class="chart-header">
-                    <h4 class="scenario-name">{{ config.scenario }}</h4>
-                    <div v-if="getTestConclusion(config, 'summary-' + idx)" class="test-conclusion">
-                      测试结论：{{ getTestConclusion(config, 'summary-' + idx) }}
+              <div class="row-charts row-charts--summary">
+                <div class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+                  <template v-if="!isConfigNull(config)">
+                    <div class="chart-header">
+                      <h4 class="scenario-name">{{ config.scenario }}</h4>
+                      <div v-if="getTestConclusion(config, 'summary-' + idx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'summary-' + idx) }}
+                      </div>
                     </div>
-                  </div>
-                  <div :id="`chart-${config.order}`" class="chart-content"></div>
-                </template>
+                    <div :id="`chart-${config.order}`" class="chart-content"></div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
@@ -95,8 +100,7 @@
           <div
             v-for="(group, groupIdx) in sectionGroups"
             :key="'section-' + groupIdx"
-            class="section-group"
-            :class="{ 'section-group--highlighted': !!group.section }"
+            class="chart-card"
           >
             <div v-for="(row, rowIdx) in group.rows" :key="'row-' + groupIdx + '-' + rowIdx" class="chart-row">
               <div class="row-legend">
@@ -670,16 +674,25 @@ onUnmounted(() => {
 }
 
 .charts-section {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 0;
+}
+
+.charts-section-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.charts-section-title {
+  font-size: 1.2rem;
+  margin: 0;
+  color: #333;
 }
 
 .charts-grid {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
 }
 
 .chart-row {
@@ -739,16 +752,11 @@ onUnmounted(() => {
   grid-template-columns: 1fr !important;
 }
 
-.section-group {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.section-group--highlighted {
-  background: rgba(0, 0, 0, 0.04);
-  border-radius: 8px;
-  padding: 16px;
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .chart-wrapper {
