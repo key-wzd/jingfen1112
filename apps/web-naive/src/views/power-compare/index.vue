@@ -63,8 +63,8 @@
           <h3 class="charts-section-title">XXXXXX</h3>
         </div>
         <div class="charts-grid">
-          <!-- 总结场景 + 无section场景放在同一个卡片内 -->
-          <div class="chart-card">
+          <!-- 第一张卡片：总结场景 + 第一组普通场景（无隔断） -->
+          <div v-if="summaryItems.length > 0 || chartCards.length > 0" class="chart-card">
             <!-- 总结场景（始终置顶，独占整行） -->
             <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-row">
               <div class="row-legend">
@@ -96,18 +96,18 @@
               </div>
             </div>
 
-            <!-- 无 section 的普通场景 -->
-            <div v-for="(row, rowIdx) in noSectionRows" :key="'nosec-' + rowIdx" class="chart-row">
+            <!-- 第一张卡片内的普通场景行 -->
+            <div v-for="(row, rowIdx) in chartCards[0].rows" :key="'card0-' + rowIdx" class="chart-row">
               <div class="row-legend">
                 <div class="legend-container">
                   <div
                     v-for="product in selectedProducts"
                     :key="product.id"
                     class="legend-item"
-                    :class="{ inactive: rowHiddenIds['nosec-' + rowIdx]?.includes(product.id) }"
-                    @click="handleLegendToggle('nosec-' + rowIdx, product)"
+                    :class="{ inactive: rowHiddenIds['card-0-' + rowIdx]?.includes(product.id) }"
+                    @click="handleLegendToggle('card-0-' + rowIdx, product)"
                   >
-                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['nosec-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['card-0-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
                     <span class="legend-text">{{ getModelName(product) }}</span>
                   </div>
                 </div>
@@ -117,8 +117,8 @@
                   <template v-if="!isConfigNull(config)">
                     <div class="chart-header">
                       <h4 class="scenario-name">{{ config.scenario }}</h4>
-                      <div v-if="getTestConclusion(config, 'nosec-' + rowIdx)" class="test-conclusion">
-                        测试结论：{{ getTestConclusion(config, 'nosec-' + rowIdx) }}
+                      <div v-if="getTestConclusion(config, 'card-0-' + rowIdx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'card-0-' + rowIdx) }}
                       </div>
                     </div>
                     <div :id="`chart-${config.order}`" class="chart-content"></div>
@@ -128,23 +128,23 @@
             </div>
           </div>
 
-          <!-- 有 section 的区域分组（每个 section 组一个独立卡片） -->
+          <!-- 后续卡片：line 分割线产生的新卡片 -->
           <div
-            v-for="(group, groupIdx) in hasSectionGroups"
-            :key="'section-' + groupIdx"
+            v-for="(card, cardIdx) in chartCards.slice(1)"
+            :key="'card-' + (cardIdx + 1)"
             class="chart-card"
           >
-            <div v-for="(row, rowIdx) in group.rows" :key="'sec-' + groupIdx + '-' + rowIdx" class="chart-row">
+            <div v-for="(row, rowIdx) in card.rows" :key="'row-' + cardIdx + '-' + rowIdx" class="chart-row">
               <div class="row-legend">
                 <div class="legend-container">
                   <div
                     v-for="product in selectedProducts"
                     :key="product.id"
                     class="legend-item"
-                    :class="{ inactive: rowHiddenIds['sec-' + groupIdx + '-' + rowIdx]?.includes(product.id) }"
-                    @click="handleLegendToggle('sec-' + groupIdx + '-' + rowIdx, product)"
+                    :class="{ inactive: rowHiddenIds['card-' + (cardIdx + 1) + '-' + rowIdx]?.includes(product.id) }"
+                    @click="handleLegendToggle('card-' + (cardIdx + 1) + '-' + rowIdx, product)"
                   >
-                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['sec-' + groupIdx + '-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['card-' + (cardIdx + 1) + '-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
                     <span class="legend-text">{{ getModelName(product) }}</span>
                   </div>
                 </div>
@@ -154,8 +154,8 @@
                   <template v-if="!isConfigNull(config)">
                     <div class="chart-header">
                       <h4 class="scenario-name">{{ config.scenario }}</h4>
-                      <div v-if="getTestConclusion(config, 'sec-' + groupIdx + '-' + rowIdx)" class="test-conclusion">
-                        测试结论：{{ getTestConclusion(config, 'sec-' + groupIdx + '-' + rowIdx) }}
+                      <div v-if="getTestConclusion(config, 'card-' + (cardIdx + 1) + '-' + rowIdx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'card-' + (cardIdx + 1) + '-' + rowIdx) }}
                       </div>
                     </div>
                     <div :id="`chart-${config.order}`" class="chart-content"></div>
@@ -241,63 +241,55 @@ const isSummary = (config: ChartConfigItem) => {
   return config.scenario === '总结' || config.renderType === 'summary';
 };
 
+// 判断是否为分割线（line 与 null 来源一致，都是 scenario 字段的特殊值）
+const isLine = (config: ChartConfigItem) => {
+  return !!config.scenario && config.scenario.toLowerCase() === 'line';
+};
+
 // 总结场景项（始终置顶）
 const summaryItems = computed(() => {
   return chartConfigs.value.filter(isSummary);
 });
 
-// 普通场景项
-const normalItems = computed(() => {
-  return chartConfigs.value.filter(c => !isSummary(c));
-});
-
-// 无 section 的普通场景行
-const noSectionRows = computed(() => {
-  const items = normalItems.value.filter(item => !item.section);
-  const rows: ChartConfigItem[][] = [];
-  for (let i = 0; i < items.length; i += 2) {
-    rows.push(items.slice(i, i + 2));
-  }
-  return rows;
-});
-
-// 有 section 的区域分组（每个 section 组一个独立卡片）
-interface SectionGroup {
-  section: string;
+// 卡片分组：遇到 line 分割线则开新卡片，line 本身不渲染
+interface ChartCard {
   rows: ChartConfigItem[][];
 }
 
-const hasSectionGroups = computed(() => {
-  const groups: SectionGroup[] = [];
-  let currentSection: string | undefined = undefined;
+const chartCards = computed(() => {
+  const cards: ChartCard[] = [];
   let currentItems: ChartConfigItem[] = [];
 
-  for (const item of normalItems.value) {
-    if (!item.section) continue;
-    const itemSection = item.section;
-    if (itemSection !== currentSection) {
+  for (const item of chartConfigs.value) {
+    // 总结场景跳过（单独置顶处理）
+    if (isSummary(item)) continue;
+    // null 空配置跳过（只判断 scenario 值，不依赖运行时选中状态）
+    if (!item.scenario || item.scenario.toLowerCase() === 'null') continue;
+    // line 分割线：结束当前卡片，开新卡片（line 本身不进任何卡片）
+    if (isLine(item)) {
       if (currentItems.length > 0) {
         const rows: ChartConfigItem[][] = [];
         for (let i = 0; i < currentItems.length; i += 2) {
           rows.push(currentItems.slice(i, i + 2));
         }
-        groups.push({ section: currentSection!, rows });
+        cards.push({ rows });
       }
-      currentSection = itemSection;
-      currentItems = [item];
-    } else {
-      currentItems.push(item);
+      currentItems = [];
+      continue;
     }
+    // 普通场景
+    currentItems.push(item);
   }
+  // 最后一批
   if (currentItems.length > 0) {
     const rows: ChartConfigItem[][] = [];
     for (let i = 0; i < currentItems.length; i += 2) {
       rows.push(currentItems.slice(i, i + 2));
     }
-    groups.push({ section: currentSection!, rows });
+    cards.push({ rows });
   }
 
-  return groups;
+  return cards;
 });
 
 // 所有渲染行（用于 createCharts 遍历）
@@ -308,13 +300,9 @@ const allChartRows = computed(() => {
     rows.push({ key: `summary-${idx}`, items: [item] });
   });
 
-  noSectionRows.value.forEach((rowItems, rowIdx) => {
-    rows.push({ key: `nosec-${rowIdx}`, items: rowItems });
-  });
-
-  hasSectionGroups.value.forEach((group, groupIdx) => {
-    group.rows.forEach((rowItems, rowIdx) => {
-      rows.push({ key: `sec-${groupIdx}-${rowIdx}`, items: rowItems });
+  chartCards.value.forEach((card, cardIdx) => {
+    card.rows.forEach((rowItems, rowIdx) => {
+      rows.push({ key: `card-${cardIdx}-${rowIdx}`, items: rowItems });
     });
   });
 
@@ -739,7 +727,7 @@ onUnmounted(() => {
 .charts-grid {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .chart-row {
