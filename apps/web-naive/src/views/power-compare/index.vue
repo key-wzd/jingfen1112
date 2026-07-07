@@ -63,9 +63,10 @@
           <h3 class="charts-section-title">XXXXXX</h3>
         </div>
         <div class="charts-grid">
-          <!-- 总结场景（始终置顶，独占整行） -->
-          <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-card">
-            <div class="chart-row">
+          <!-- 总结场景 + 无section场景放在同一个卡片内 -->
+          <div class="chart-card">
+            <!-- 总结场景（始终置顶，独占整行） -->
+            <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-row">
               <div class="row-legend">
                 <div class="legend-container">
                   <div
@@ -94,15 +95,46 @@
                 </div>
               </div>
             </div>
+
+            <!-- 无 section 的普通场景 -->
+            <div v-for="(row, rowIdx) in noSectionRows" :key="'nosec-' + rowIdx" class="chart-row">
+              <div class="row-legend">
+                <div class="legend-container">
+                  <div
+                    v-for="product in selectedProducts"
+                    :key="product.id"
+                    class="legend-item"
+                    :class="{ inactive: rowHiddenIds['nosec-' + rowIdx]?.includes(product.id) }"
+                    @click="handleLegendToggle('nosec-' + rowIdx, product)"
+                  >
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['nosec-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-text">{{ getModelName(product) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="row-charts">
+                <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
+                  <template v-if="!isConfigNull(config)">
+                    <div class="chart-header">
+                      <h4 class="scenario-name">{{ config.scenario }}</h4>
+                      <div v-if="getTestConclusion(config, 'nosec-' + rowIdx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'nosec-' + rowIdx) }}
+                      </div>
+                    </div>
+                    <div :id="`chart-${config.order}`" class="chart-content"></div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- 基于 section 的区域分组 -->
+          <!-- 有 section 的区域分组（每个 section 组一个独立卡片） -->
           <div
-            v-for="(group, groupIdx) in sectionGroups"
+            v-for="(group, groupIdx) in hasSectionGroups"
             :key="'section-' + groupIdx"
             class="chart-card"
           >
-            <div v-for="(row, rowIdx) in group.rows" :key="'row-' + groupIdx + '-' + rowIdx" class="chart-row">
+            <div v-for="(row, rowIdx) in group.rows" :key="'sec-' + groupIdx + '-' + rowIdx" class="chart-row">
               <div class="row-legend">
                 <div class="legend-container">
                   <div
@@ -219,18 +251,29 @@ const normalItems = computed(() => {
   return chartConfigs.value.filter(c => !isSummary(c));
 });
 
-// 区域分组（基于 section 字段连续分组）
+// 无 section 的普通场景行
+const noSectionRows = computed(() => {
+  const items = normalItems.value.filter(item => !item.section);
+  const rows: ChartConfigItem[][] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push(items.slice(i, i + 2));
+  }
+  return rows;
+});
+
+// 有 section 的区域分组（每个 section 组一个独立卡片）
 interface SectionGroup {
-  section: string | undefined;
+  section: string;
   rows: ChartConfigItem[][];
 }
 
-const sectionGroups = computed(() => {
+const hasSectionGroups = computed(() => {
   const groups: SectionGroup[] = [];
   let currentSection: string | undefined = undefined;
   let currentItems: ChartConfigItem[] = [];
 
   for (const item of normalItems.value) {
+    if (!item.section) continue;
     const itemSection = item.section;
     if (itemSection !== currentSection) {
       if (currentItems.length > 0) {
@@ -238,7 +281,7 @@ const sectionGroups = computed(() => {
         for (let i = 0; i < currentItems.length; i += 2) {
           rows.push(currentItems.slice(i, i + 2));
         }
-        groups.push({ section: currentSection, rows });
+        groups.push({ section: currentSection!, rows });
       }
       currentSection = itemSection;
       currentItems = [item];
@@ -251,7 +294,7 @@ const sectionGroups = computed(() => {
     for (let i = 0; i < currentItems.length; i += 2) {
       rows.push(currentItems.slice(i, i + 2));
     }
-    groups.push({ section: currentSection, rows });
+    groups.push({ section: currentSection!, rows });
   }
 
   return groups;
@@ -265,7 +308,11 @@ const allChartRows = computed(() => {
     rows.push({ key: `summary-${idx}`, items: [item] });
   });
 
-  sectionGroups.value.forEach((group, groupIdx) => {
+  noSectionRows.value.forEach((rowItems, rowIdx) => {
+    rows.push({ key: `nosec-${rowIdx}`, items: rowItems });
+  });
+
+  hasSectionGroups.value.forEach((group, groupIdx) => {
     group.rows.forEach((rowItems, rowIdx) => {
       rows.push({ key: `sec-${groupIdx}-${rowIdx}`, items: rowItems });
     });
