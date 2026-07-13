@@ -59,103 +59,40 @@
       </section>
 
       <section v-if="selectedProducts.length > 0" class="charts-section">
-        <div class="charts-section-header">
-          <h3 class="charts-section-title">XXXXXX</h3>
-        </div>
         <div class="charts-grid">
-          <!-- 第一张卡片：总结场景 + 第一组普通场景（无隔断） -->
-          <div v-if="summaryItems.length > 0 || chartCards.length > 0" class="chart-card">
-            <!-- 总结场景（始终置顶，独占整行） -->
-            <div v-for="(config, idx) in summaryItems" :key="'summary-' + config.order" class="chart-row">
-              <div class="row-legend">
-                <div class="legend-container">
-                  <div
-                    v-for="product in selectedProducts"
-                    :key="product.id"
-                    class="legend-item"
-                    :class="{ inactive: rowHiddenIds['summary-' + idx]?.includes(product.id) }"
-                    @click="handleLegendToggle('summary-' + idx, product)"
-                  >
-                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['summary-' + idx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
-                    <span class="legend-text">{{ getModelName(product) }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="row-charts row-charts--summary">
-                <div class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
-                  <template v-if="!isConfigNull(config)">
-                    <div class="chart-header">
-                      <h4 class="scenario-name">{{ config.scenario }}</h4>
-                      <div v-if="getTestConclusion(config, 'summary-' + idx)" class="test-conclusion">
-                        测试结论：{{ getTestConclusion(config, 'summary-' + idx) }}
-                      </div>
-                    </div>
-                    <div :id="`chart-${config.order}`" class="chart-content"></div>
-                  </template>
-                </div>
-              </div>
-            </div>
-
-            <!-- 第一张卡片内的普通场景行 -->
-            <div v-for="(row, rowIdx) in chartCards[0].rows" :key="'card0-' + rowIdx" class="chart-row">
-              <div class="row-legend">
-                <div class="legend-container">
-                  <div
-                    v-for="product in selectedProducts"
-                    :key="product.id"
-                    class="legend-item"
-                    :class="{ inactive: rowHiddenIds['card-0-' + rowIdx]?.includes(product.id) }"
-                    @click="handleLegendToggle('card-0-' + rowIdx, product)"
-                  >
-                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['card-0-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
-                    <span class="legend-text">{{ getModelName(product) }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="row-charts">
-                <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
-                  <template v-if="!isConfigNull(config)">
-                    <div class="chart-header">
-                      <h4 class="scenario-name">{{ config.scenario }}</h4>
-                      <div v-if="getTestConclusion(config, 'card-0-' + rowIdx)" class="test-conclusion">
-                        测试结论：{{ getTestConclusion(config, 'card-0-' + rowIdx) }}
-                      </div>
-                    </div>
-                    <div :id="`chart-${config.order}`" class="chart-content"></div>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 后续卡片：line 分割线产生的新卡片 -->
+          <!-- 卡片：由 summary/line/default 分组产生 -->
           <div
-            v-for="(card, cardIdx) in chartCards.slice(1)"
-            :key="'card-' + (cardIdx + 1)"
+            v-for="(card, cardIdx) in chartCards"
+            :key="'card-' + cardIdx"
             class="chart-card"
           >
-            <div v-for="(row, rowIdx) in card.rows" :key="'row-' + cardIdx + '-' + rowIdx" class="chart-row">
+            <h3 class="chart-card-title">{{ card.title }}</h3>
+            <div
+              v-for="(row, rowIdx) in card.rows"
+              :key="'row-' + cardIdx + '-' + rowIdx"
+              class="chart-row"
+            >
               <div class="row-legend">
                 <div class="legend-container">
                   <div
                     v-for="product in selectedProducts"
                     :key="product.id"
                     class="legend-item"
-                    :class="{ inactive: rowHiddenIds['card-' + (cardIdx + 1) + '-' + rowIdx]?.includes(product.id) }"
-                    @click="handleLegendToggle('card-' + (cardIdx + 1) + '-' + rowIdx, product)"
+                    :class="{ inactive: rowHiddenIds['card-' + cardIdx + '-' + rowIdx]?.includes(product.id) }"
+                    @click="handleLegendToggle('card-' + cardIdx + '-' + rowIdx, product)"
                   >
-                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['card-' + (cardIdx + 1) + '-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
+                    <span class="legend-color" :style="{ backgroundColor: rowHiddenIds['card-' + cardIdx + '-' + rowIdx]?.includes(product.id) ? '#ccc' : getProductColor(product) }"></span>
                     <span class="legend-text">{{ getModelName(product) }}</span>
                   </div>
                 </div>
               </div>
-              <div class="row-charts">
+              <div class="row-charts" :class="{ 'row-charts--single': card.type === 'summary' }">
                 <div v-for="config in row" :key="config.order" class="chart-wrapper" :class="{ 'chart-empty-wrapper': isConfigNull(config) }">
                   <template v-if="!isConfigNull(config)">
                     <div class="chart-header">
                       <h4 class="scenario-name">{{ config.scenario }}</h4>
-                      <div v-if="getTestConclusion(config, 'card-' + (cardIdx + 1) + '-' + rowIdx)" class="test-conclusion">
-                        测试结论：{{ getTestConclusion(config, 'card-' + (cardIdx + 1) + '-' + rowIdx) }}
+                      <div v-if="getTestConclusion(config, 'card-' + cardIdx + '-' + rowIdx)" class="test-conclusion">
+                        测试结论：{{ getTestConclusion(config, 'card-' + cardIdx + '-' + rowIdx) }}
                       </div>
                     </div>
                     <div :id="`chart-${config.order}`" class="chart-content"></div>
@@ -213,6 +150,27 @@ const chartColors = [
   '#AB83A1', '#36827F', '#D4A373', '#588157',
 ];
 
+// 颜色绑定映射：productId -> color（页面生命周期内持久化，退出页面后重置）
+const productColorMap = reactive<Record<number, string>>({});
+// 已被占用的颜色索引集合
+const usedColorIndices = reactive<Set<number>>(new Set());
+
+// 为产品分配颜色（从未被占用的颜色中按顺序取第一个）
+const assignProductColor = (productId: number) => {
+  if (productColorMap[productId]) return productColorMap[productId];
+  for (let i = 0; i < chartColors.length; i++) {
+    if (!usedColorIndices.has(i)) {
+      usedColorIndices.add(i);
+      productColorMap[productId] = chartColors[i];
+      return chartColors[i];
+    }
+  }
+  // 颜色池用尽，循环复用
+  const fallback = chartColors[Object.keys(productColorMap).length % chartColors.length];
+  productColorMap[productId] = fallback;
+  return fallback;
+};
+
 const getUnitLabel = () => {
   if (chartConfigs.value.length > 0) {
     const configWithUnit = chartConfigs.value.find(c => c.unit && c.unit.trim());
@@ -236,69 +194,94 @@ const getUnitLabel = () => {
   return '';
 };
 
-// 判断是否为总结场景
-const isSummary = (config: ChartConfigItem) => {
-  return config.scenario === '总结' || config.renderType === 'summary';
-};
-
 // 判断是否为分割线（line 与 null 来源一致，都是 scenario 字段的特殊值）
 const isLine = (config: ChartConfigItem) => {
   return !!config.scenario && config.scenario.toLowerCase() === 'line';
 };
 
-// 总结场景项（始终置顶）
-const summaryItems = computed(() => {
-  return chartConfigs.value.filter(isSummary);
-});
+// 判断是否为总结分割线
+const isSummary = (config: ChartConfigItem) => {
+  return !!config.scenario && config.scenario.toLowerCase() === 'summary';
+};
 
-// 卡片分组：遇到 line 分割线则开新卡片，line 本身不渲染
+// 卡片分组：遇到 line/summary 分割线则开新卡片，下一行作为标题
 interface ChartCard {
+  type: 'summary' | 'line' | 'default';
+  title: string;
   rows: ChartConfigItem[][];
 }
 
 const chartCards = computed(() => {
   const cards: ChartCard[] = [];
+  let currentType: 'summary' | 'line' | 'default' = 'default';
+  let currentTitle = '选择对比产品';
   let currentItems: ChartConfigItem[] = [];
+  let nextIsTitle = false;
+  let pendingType: 'summary' | 'line' | null = null;
 
   for (const item of chartConfigs.value) {
-    // 总结场景跳过（单独置顶处理）
-    if (isSummary(item)) continue;
-    // null 空配置跳过（只判断 scenario 值，不依赖运行时选中状态）
+    // null 空配置跳过
     if (!item.scenario || item.scenario.toLowerCase() === 'null') continue;
-    // line 分割线：结束当前卡片，开新卡片（line 本身不进任何卡片）
-    if (isLine(item)) {
+    
+    // summary 分割线：标记下一行是标题，记录类型
+    if (isSummary(item)) {
       if (currentItems.length > 0) {
-        const rows: ChartConfigItem[][] = [];
-        for (let i = 0; i < currentItems.length; i += 2) {
-          rows.push(currentItems.slice(i, i + 2));
-        }
-        cards.push({ rows });
+        const rows = groupItems(currentItems, currentType);
+        cards.push({ type: currentType, title: currentTitle, rows });
       }
+      pendingType = 'summary';
+      nextIsTitle = true;
       currentItems = [];
       continue;
     }
+    
+    // line 分割线：标记下一行是标题，记录类型
+    if (isLine(item)) {
+      if (currentItems.length > 0) {
+        const rows = groupItems(currentItems, currentType);
+        cards.push({ type: currentType, title: currentTitle, rows });
+      }
+      pendingType = 'line';
+      nextIsTitle = true;
+      currentItems = [];
+      continue;
+    }
+    
+    // 标题行（分割线后的下一行）
+    if (nextIsTitle) {
+      currentTitle = item.scenario;
+      currentType = pendingType || 'default';
+      nextIsTitle = false;
+      pendingType = null;
+      continue;
+    }
+    
     // 普通场景
     currentItems.push(item);
   }
+  
   // 最后一批
   if (currentItems.length > 0) {
-    const rows: ChartConfigItem[][] = [];
-    for (let i = 0; i < currentItems.length; i += 2) {
-      rows.push(currentItems.slice(i, i + 2));
-    }
-    cards.push({ rows });
+    const rows = groupItems(currentItems, currentType);
+    cards.push({ type: currentType, title: currentTitle, rows });
   }
 
   return cards;
 });
 
+// 按类型分组为行
+const groupItems = (items: ChartConfigItem[], type: 'summary' | 'line' | 'default') => {
+  const rows: ChartConfigItem[][] = [];
+  const chunkSize = type === 'summary' ? 1 : 2;
+  for (let i = 0; i < items.length; i += chunkSize) {
+    rows.push(items.slice(i, i + chunkSize));
+  }
+  return rows;
+};
+
 // 所有渲染行（用于 createCharts 遍历）
 const allChartRows = computed(() => {
   const rows: { key: string; items: ChartConfigItem[] }[] = [];
-
-  summaryItems.value.forEach((item, idx) => {
-    rows.push({ key: `summary-${idx}`, items: [item] });
-  });
 
   chartCards.value.forEach((card, cardIdx) => {
     card.rows.forEach((rowItems, rowIdx) => {
@@ -349,10 +332,10 @@ const handleProductToggleByCol = (colIdx: number) => {
 };
 
 const getProductColor = (product: Product) => {
-  const index = selectedProductIds.value.indexOf(product.id);
-  if (index >= 0) return chartColors[index % chartColors.length];
-  const fallbackIndex = allProducts.value.findIndex(p => p.id === product.id);
-  return chartColors[fallbackIndex % chartColors.length];
+  // 优先从已绑定映射中取（页面内颜色记忆）
+  if (productColorMap[product.id]) return productColorMap[product.id];
+  // 未绑定的产品（理论上不应出现，兜底按 id 分配）
+  return chartColors[product.id % chartColors.length];
 };
 
 const getModelName = (product: Product) => {
@@ -435,17 +418,22 @@ const initSelectedFromQuery = () => {
   }
 
   selectedProductIds.value = ids;
+  // 为初始化选中的产品分配颜色
+  ids.forEach(id => assignProductColor(id));
 };
 
 const handleProductToggle = (product: Product) => {
   const index = selectedProductIds.value.indexOf(product.id);
   if (index > -1) {
+    // 取消选择：保留颜色绑定（页面内记忆），仅移除选中状态
     selectedProductIds.value.splice(index, 1);
     for (const key of Object.keys(rowHiddenIds)) {
       const hi = rowHiddenIds[key].indexOf(product.id);
       if (hi > -1) rowHiddenIds[key].splice(hi, 1);
     }
   } else {
+    // 新选择：分配颜色（若未绑定过）
+    assignProductColor(product.id);
     selectedProductIds.value.push(product.id);
   }
 };
@@ -531,7 +519,7 @@ const createCharts = () => {
         chart.setOption({
           tooltip: barTooltip,
           legend: { show: false },
-          grid: { top: 30 },
+          grid: { left: '3%', right: '3%', top: 30, bottom: 10, containLabel: true },
           xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
           yAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
           series,
@@ -540,7 +528,7 @@ const createCharts = () => {
         chart.setOption({
           tooltip: barTooltip,
           legend: { show: false },
-          grid: { right: 60 },
+          grid: { left: '3%', right: '60', top: 30, bottom: 10, containLabel: true },
           yAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
           xAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
           series,
@@ -549,7 +537,7 @@ const createCharts = () => {
         chart.setOption({
           tooltip: barTooltip,
           legend: { show: false },
-          grid: { top: 30 },
+          grid: { left: '3%', right: '3%', top: 30, bottom: 10, containLabel: true },
           xAxis: { type: 'category', data: axisData, axisLabel: axisLabelStyle },
           yAxis: { type: 'value', name: unit, nameTextStyle: axisNameStyle },
           series,
@@ -591,6 +579,9 @@ watch(selectedProducts, () => {
 watch(category, () => {
   selectedProductIds.value = [];
   Object.keys(rowHiddenIds).forEach(k => delete rowHiddenIds[k]);
+  // 切换分类时重置颜色绑定（下次进入重新分配）
+  Object.keys(productColorMap).forEach(k => delete productColorMap[Number(k)]);
+  usedColorIndices.clear();
   categoryName.value = '';
   chartConfigs.value = [];
   headerRows.value = [];
@@ -712,18 +703,6 @@ onUnmounted(() => {
   padding: 0;
 }
 
-.charts-section-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 20px;
-}
-
-.charts-section-title {
-  font-size: 1.2rem;
-  margin: 0;
-  color: #333;
-}
-
 .charts-grid {
   display: flex;
   flex-direction: column;
@@ -783,7 +762,8 @@ onUnmounted(() => {
   gap: 24px;
 }
 
-.row-charts--summary {
+/* summary 类型：一个图占整行 */
+.row-charts--single {
   grid-template-columns: 1fr !important;
 }
 
@@ -792,6 +772,12 @@ onUnmounted(() => {
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.chart-card-title {
+  font-size: 1.2rem;
+  margin: 0 0 20px;
+  color: #333;
 }
 
 .chart-wrapper {
@@ -833,7 +819,7 @@ onUnmounted(() => {
 .back-to-top {
   position: fixed;
   right: 500px;
-  bottom: 500px;
+  bottom: 100px;
   width: 66px;
   height: 66px;
   border-radius: 50%;
@@ -843,7 +829,8 @@ onUnmounted(() => {
   font-size: 1.2rem;
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
-  transition: all 0.3s;
+  transition: none;
+  animation: none;
   z-index: 100;
   display: flex;
   align-items: center;
