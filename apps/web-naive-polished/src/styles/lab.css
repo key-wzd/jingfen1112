@@ -1,0 +1,84 @@
+:root {
+  --lab-ink: #17263e;
+  --lab-muted: #52637c;
+  --lab-primary: #4f46e5;
+  --lab-border: #dfe6ef;
+  --lab-canvas: #f4f7fb;
+}
+.fullscreen-layout,
+.login-page {
+  font-family: Inter, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+}
+.fullscreen-layout button,
+.fullscreen-layout input,
+.fullscreen-layout select {
+  font: inherit;
+}
+.fullscreen-layout :is(button, a, input, select, summary):focus-visible,
+.login-page :is(button, input):focus-visible {
+  outline: 3px solid #8b83ef;
+  outline-offset: 3px;
+}
+.lab-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #52637c;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.lab-status.error {
+  color: #933344;
+  background: #fff7f8;
+  border-color: #efc7cf;
+}
+.lab-status button,
+.lab-button {
+  border: 1px solid #d2d9e7;
+  border-radius: 9px;
+  padding: 9px 14px;
+  color: #4038b5;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.lab-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lab-toolbar input {
+  min-width: 190px;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dfe6ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #17263e;
+}
+.lab-help {
+  color: #52637c;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.lab-error {
+  color: #a53950;
+  font-size: 14px;
+  margin: 12px 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

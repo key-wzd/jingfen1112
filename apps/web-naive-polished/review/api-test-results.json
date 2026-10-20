@@ -1,0 +1,15 @@
+{
+  "passed": 10,
+  "checks": [
+    "unauthenticated API blocked",
+    "forged browser token blocked",
+    "analyst cannot modify/import data",
+    "actual workbook preview succeeds",
+    "changed file invalidates preview",
+    "invalid measurement rejected before mutation",
+    "rejected imports leave active data unchanged",
+    "staged import switches all validated metadata and preserves record counts",
+    "restore manifest produced",
+    "logout revokes server session"
+  ]
+}

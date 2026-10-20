@@ -220,9 +220,6 @@ const chartCards = computed(() => {
   let pendingType: 'summary' | 'line' | null = null;
 
   for (const item of chartConfigs.value) {
-    // null 空配置跳过
-    if (!item.scenario || item.scenario.toLowerCase() === 'null') continue;
-    
     // summary 分割线：标记下一行是标题，记录类型
     if (isSummary(item)) {
       if (currentItems.length > 0) {

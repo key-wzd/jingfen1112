@@ -1,0 +1,16 @@
+{
+  "passed": 10,
+  "checks": [
+    "internal analysis carousel mounts, autoplays and supports controls",
+    "homepage real dataset counts, internal wording and five explicit device icons",
+    "category opens power analysis directly; records, charts and raw values render",
+    "selected measurement export",
+    "selection persists between parameter and power views",
+    "mobile charts resize, no page overflow, logout remains accessible",
+    "management imports show a real preflight checklist on mobile",
+    "brand identity, zero, missing values and scenario-specific units",
+    "clearing selection disposes chart DOM",
+    "offline home shows error/retry and no fabricated dataset"
+  ],
+  "pageErrors": []
+}

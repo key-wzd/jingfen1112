@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist.zip
+server/.env.local
+server/backups/
+review/before-internal-lab/
+review/*.log
+review/*.pid

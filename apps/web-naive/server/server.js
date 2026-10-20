@@ -100,6 +100,7 @@ function categoryNameToKey(name) {
   const map = {
     '旗舰手机': 'phones', '中低端手机': 'mid_low_phones',
     '鼠标': 'mice', '键盘': 'keyboards', '遥控器': 'remote_controls',
+    '路由器': 'routers',
   };
   if (map[name]) return map[name];
   return name
