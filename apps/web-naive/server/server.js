@@ -518,7 +518,7 @@ async function syncMetaToDb(categoryKey, categoryName, sheetName, sheetType, tab
   await pool.query(
     `INSERT INTO sheet_meta (category_key, category_name, sheet_name, sheet_type, table_name)
      VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE category_name = VALUES(category_name), sheet_name = VALUES(sheet_name), table_name = VALUES(table_name)`,
+     ON DUPLICATE KEY UPDATE category_key = VALUES(category_key), category_name = VALUES(category_name), sheet_name = VALUES(sheet_name), sheet_type = VALUES(sheet_type), table_name = VALUES(table_name)`,
     [categoryKey, categoryName, sheetName, sheetType, tableName]
   );
 
@@ -845,20 +845,29 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
 
     const existingMeta = await getMetaFromDb();
 
-    for (const [categoryKey, catInfo] of Object.entries(sheetInfoMap)) {
-      if (existingMeta[categoryKey]) {
-        if (existingMeta[categoryKey].info) {
-          try { await pool.query(`DROP TABLE IF EXISTS \`${existingMeta[categoryKey].info.table}\``); } catch (_) {}
-        }
-        if (existingMeta[categoryKey].power) {
-          try { await pool.query(`DROP TABLE IF EXISTS \`${existingMeta[categoryKey].power.table}\``); } catch (_) {}
+    for (const categoryKey of Object.keys(sheetInfoMap)) {
+      // 分类映射可能在首次导入后改变，例如“路由器”变为 routers。
+      // 按当前映射找出旧 key，避免同名 Sheet 保留旧分类及关联元数据。
+      const keysToReplace = new Set([categoryKey]);
+      for (const [existingKey, config] of Object.entries(existingMeta)) {
+        if (categoryNameToKey(config.name) === categoryKey) {
+          keysToReplace.add(existingKey);
         }
       }
-      await pool.query('DELETE FROM sheet_meta WHERE category_key = ?', [categoryKey]);
-      await pool.query('DELETE FROM field_meta WHERE category_key = ?', [categoryKey]);
-      await pool.query('DELETE FROM chart_config WHERE category_key = ?', [categoryKey]);
-      await pool.query('DELETE FROM header_rows WHERE category_key = ?', [categoryKey]);
-      await pool.query('DELETE FROM image_mapping WHERE category_key = ?', [categoryKey]);
+
+      for (const key of keysToReplace) {
+        const config = existingMeta[key];
+        for (const sheet of [config?.info, config?.power]) {
+          if (sheet) {
+            await pool.query('DROP TABLE IF EXISTS ??', [sheet.table]);
+          }
+        }
+        await pool.query('DELETE FROM sheet_meta WHERE category_key = ?', [key]);
+        await pool.query('DELETE FROM field_meta WHERE category_key = ?', [key]);
+        await pool.query('DELETE FROM chart_config WHERE category_key = ?', [key]);
+        await pool.query('DELETE FROM header_rows WHERE category_key = ?', [key]);
+        await pool.query('DELETE FROM image_mapping WHERE category_key = ?', [key]);
+      }
     }
 
     const results = {};
