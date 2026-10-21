@@ -10,6 +10,7 @@ import AdmZip from 'adm-zip';
 import { randomBytes, createHash } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { installAuth } from './auth.js';
+import { createSqlPlanStore, installAnalysisPlanRoutes } from './analysis-plans.js';
 import { toMeasurement } from '../shared/measurement.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,7 +25,7 @@ const app = express();
 const localEnv = path.join(__dirname, '.env.local');
 if (fs.existsSync(localEnv)) process.loadEnvFile(localEnv);
 const PORT = Number(process.env.TC_API_PORT || 3002);
-const HOST = process.env.TC_API_HOST || '127.0.0.1';
+const HOST = process.env.TC_API_HOST || '0.0.0.0';
 
 app.use(cors({ origin: process.env.TC_WEB_ORIGIN || 'http://127.0.0.1:5890' }));
 app.use(express.json({ limit: '1mb' }));
@@ -53,6 +54,18 @@ const pool = {
   query: (...args) => (transactionContext.getStore() || rawPool).query(...args),
   getConnection: () => rawPool.getConnection(),
 };
+
+const planStore = createSqlPlanStore(rawPool);
+installAnalysisPlanRoutes(app, {
+  store: planStore,
+  getDataset: async (category, ids) => {
+    const meta = await getMetaFromDb();
+    const config = meta[category]?.power;
+    if (!config) return null;
+    const [records] = await pool.query(`SELECT id,brand,model FROM ${mysql.escapeId(config.table)} WHERE id IN (?)`, [ids]);
+    return { version: config.table, records };
+  },
+});
 
 const CHART_TYPE_MAP = {
   折线图: 'line',
@@ -929,6 +942,7 @@ app.get('/api/:category/power', async (req, res) => {
       success: true,
       data: rows,
       headerRows: config.power.headerRows || [],
+      datasetVersion: config.power.table,
     });
   } catch (error) {
     console.error('查询功耗数据失败:', error);
@@ -1622,6 +1636,7 @@ async function loadFromTemplateOnFirstRun() {
 async function startServer() {
   try {
     await initDatabase();
+    await planStore.init();
     await loadFromTemplateOnFirstRun();
     app.listen(PORT, HOST, () => {
       console.log(`数据库服务已启动: http://${HOST}:${PORT}`);

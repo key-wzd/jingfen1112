@@ -1,1 +1,1 @@
-2026-10-20: internal lab refactor changed source graph; rebuild before using line references.
+2026-10-21: analysis-plan auth/API and BackToTop added. Existing graph predates these changes.

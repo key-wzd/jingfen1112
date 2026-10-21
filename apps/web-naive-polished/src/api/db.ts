@@ -129,6 +129,7 @@ export interface OverviewData {
 }
 export interface SessionData {
   token: string;
+  accountId: string;
   username: string;
   role: 'admin' | 'user';
 }
@@ -140,6 +141,7 @@ export interface ImportPreview {
 
 export interface ApiResponse<T = any> {
   status?: number;
+  datasetVersion?: string;
   headerRows?: HeaderCell[][];
   success: boolean;
   data?: T;
@@ -152,6 +154,38 @@ export interface ApiResponse<T = any> {
 
 export interface AllDataResponse {
   [key: string]: CategoryData;
+}
+
+export interface PlanDefinition {
+  schemaVersion: 1;
+  datasetVersion: string;
+  selectedRecords: { id: number; brand: string; model: string }[];
+  baselineId: number | null;
+  hiddenByRow: Record<string, number[]>;
+}
+export interface AnalysisPlan {
+  id: string;
+  name: string;
+  category: string;
+  ownerAccount: string;
+  ownerName: string;
+  visibility: 'private' | 'shared';
+  definition: PlanDefinition;
+  createdAt: string;
+  updatedAt: string;
+  canManage: boolean;
+}
+export interface PlanList {
+  plans: AnalysisPlan[];
+  viewer: { accountId: string; displayName: string; role: 'admin' | 'user' };
+}
+export interface SavePlanInput {
+  name: string;
+  category: string;
+  datasetVersion: string;
+  selectedIds: number[];
+  baselineId: number | null;
+  hiddenByRow: Record<string, number[]>;
 }
 
 async function request<T>(
@@ -170,8 +204,13 @@ async function request<T>(
       signal: options.signal || AbortSignal.timeout(15000),
     });
     const data = await response.json().catch(() => null);
-    if (response.status === 401 && url !== '/api/auth/login') {
+    if (
+      response.status === 401 &&
+      url !== '/api/auth/login' &&
+      token === localStorage.getItem('tc_token')
+    ) {
       localStorage.removeItem('tc_token');
+      localStorage.removeItem('tc_account_id');
       window.dispatchEvent(new Event('tc-session-expired'));
     }
     if (!response.ok)
@@ -204,6 +243,25 @@ export function getImageUrl(imagePath: string): string {
 }
 
 export const dbApi = {
+  getAnalysisPlans(category: string): Promise<ApiResponse<PlanList>> {
+    return request(
+      `/api/analysis-plans?category=${encodeURIComponent(category)}`,
+    );
+  },
+  getAnalysisPlan(id: string): Promise<ApiResponse<AnalysisPlan>> {
+    return request(`/api/analysis-plans/${encodeURIComponent(id)}`);
+  },
+  saveAnalysisPlan(plan: SavePlanInput): Promise<ApiResponse<AnalysisPlan>> {
+    return request('/api/analysis-plans', {
+      method: 'POST',
+      body: JSON.stringify(plan),
+    });
+  },
+  deleteAnalysisPlan(id: string): Promise<ApiResponse> {
+    return request(`/api/analysis-plans/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
   login(username: string, password: string): Promise<ApiResponse<SessionData>> {
     return request('/api/auth/login', {
       method: 'POST',

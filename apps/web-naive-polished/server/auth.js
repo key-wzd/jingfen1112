@@ -1,6 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-export function installAuth(app) {
+export function installAuth(app, options = {}) {
   const production = process.env.NODE_ENV === 'production';
   if (
     production &&
@@ -11,7 +13,7 @@ export function installAuth(app) {
     );
   }
   const salt = randomBytes(16);
-  const accounts = [
+  const defaultAccounts = [
     {
       username: process.env.TC_ADMIN_USER || 'admin',
       password: process.env.TC_ADMIN_PASSWORD || 'admin123',
@@ -24,8 +26,45 @@ export function installAuth(app) {
       role: 'user',
       displayName: '分析人员',
     },
-  ].map(({ password, ...account }) => ({
+  ];
+  const accountsFile =
+    process.env.TC_AUTH_ACCOUNTS_FILE ||
+    fileURLToPath(new URL('./accounts.local.json', import.meta.url));
+  const extraAccounts = options.accounts
+    ? []
+    : fs.existsSync(accountsFile)
+      ? JSON.parse(fs.readFileSync(accountsFile, 'utf8').replace(/^\uFEFF/, ''))
+      : [];
+  if (!Array.isArray(extraAccounts))
+    throw new Error('独立账号配置必须是数组。');
+  const configuredAccounts = options.accounts || [
+    ...defaultAccounts,
+    ...extraAccounts,
+  ];
+  const usernames = new Set();
+  for (const account of configuredAccounts) {
+    if (
+      !account ||
+      typeof account.username !== 'string' ||
+      !account.username.trim() ||
+      account.username !== account.username.trim() ||
+      account.username.length > 100 ||
+      usernames.has(account.username) ||
+      typeof account.password !== 'string' ||
+      !account.password ||
+      account.password.length > 256 ||
+      !['user', 'admin'].includes(account.role) ||
+      (account.displayName !== undefined &&
+        (typeof account.displayName !== 'string' ||
+          account.displayName.length > 100))
+    ) {
+      throw new Error('账号配置无效：请检查唯一用户名、密码、显示名称和角色。');
+    }
+    usernames.add(account.username);
+  }
+  const accounts = configuredAccounts.map(({ password, ...account }) => ({
     ...account,
+    displayName: account.displayName || account.username,
     hash: scryptSync(password, salt, 32),
   }));
   const dummyHash = scryptSync(randomBytes(32), salt, 32);
@@ -74,13 +113,19 @@ export function installAuth(app) {
     attempts.delete(ip);
     const token = randomBytes(32).toString('hex');
     sessions.set(token, {
+      accountId: account.username,
       role: account.role,
       username: account.displayName,
       expires: Date.now() + 8 * 60 * 60 * 1000,
     });
     res.json({
       success: true,
-      data: { token, role: account.role, username: account.displayName },
+      data: {
+        token,
+        accountId: account.username,
+        role: account.role,
+        username: account.displayName,
+      },
     });
   });
   app.use('/api', (req, res, next) => {
@@ -96,6 +141,8 @@ export function installAuth(app) {
     if (
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       req.path !== '/auth/logout' &&
+      // Plan routes enforce ownership themselves; analysts may save their own plans.
+      !/^\/analysis-plans(?:\/[a-f0-9-]+)?\/?$/i.test(req.path) &&
       session.role !== 'admin'
     ) {
       return res
@@ -108,4 +155,5 @@ export function installAuth(app) {
     sessions.delete(req.sessionToken);
     res.json({ success: true });
   });
+  return { dispose: () => clearInterval(sweep) };
 }

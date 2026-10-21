@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   dbApi,
   type ChartConfigItem,
   type CategoryInfo,
   type HeaderCell,
+  type AnalysisPlan,
 } from '#/api/db';
 import PowerChart, { type ChartSample } from '#/components/PowerChart.vue';
+import AnalysisPlanManager from '#/components/AnalysisPlanManager.vue';
+import BackToTop from '#/components/BackToTop.vue';
 import {
   csvCell,
   deviceKey,
@@ -32,14 +35,6 @@ interface ChartCard {
   title: string;
   summary: boolean;
   rows: ChartRow[];
-}
-interface AnalysisPlan {
-  id: string;
-  name: string;
-  category: string;
-  createdAt: string;
-  selectedIds: number[];
-  baselineId: number | null;
 }
 const route = useRoute(),
   router = useRouter();
@@ -67,8 +62,8 @@ const palette = [
 ];
 const colorMap = ref<Record<number, string>>({});
 const baselineId = ref<number | null>(null);
-const analysisName = ref('');
-const savedPlans = ref<AnalysisPlan[]>([]);
+const datasetVersion = ref('');
+const planRestoreFeedback = ref('');
 const selectedProducts = computed(() =>
   allProducts.value.filter((p) => selectedIds.value.includes(p.id)),
 );
@@ -169,48 +164,21 @@ function deltaFor(field: string, value: number | null) {
   const baselineValue = toMeasurement(baselineProduct.value[field]);
   return baselineValue === null ? null : value - baselineValue;
 }
-function loadSavedPlans() {
-  try {
-    const raw = localStorage.getItem('tc-lab-analysis-plans');
-    savedPlans.value = raw ? JSON.parse(raw) : [];
-  } catch {
-    savedPlans.value = [];
+function restoreAnalysisPlan(plan: AnalysisPlan) {
+  planRestoreFeedback.value = '';
+  if (plan.category !== category.value || plan.definition.datasetVersion !== datasetVersion.value) {
+    planRestoreFeedback.value = '方案与当前数据版本不一致，请核对后重新保存。'; return;
   }
-}
-function saveAnalysisPlan() {
-  const name =
-    analysisName.value.trim() ||
-    `${categoryName.value || category.value} · ${new Date().toLocaleDateString('zh-CN')}`;
-  const plan: AnalysisPlan = {
-    id: `${Date.now()}`,
-    name,
-    category: category.value,
-    createdAt: new Date().toISOString(),
-    selectedIds: [...selectedIds.value],
-    baselineId: baselineId.value,
-  };
-  savedPlans.value = [
-    plan,
-    ...savedPlans.value.filter((item) => item.name !== name),
-  ].slice(0, 20);
-  localStorage.setItem(
-    'tc-lab-analysis-plans',
-    JSON.stringify(savedPlans.value),
-  );
-  analysisName.value = '';
-}
-function restoreAnalysisPlan(id: string) {
-  const plan = savedPlans.value.find(
-    (item) => item.id === id && item.category === category.value,
-  );
-  if (!plan) return;
-  selectedIds.value = allProducts.value
-    .filter((product) => plan.selectedIds.includes(product.id))
-    .map((product) => product.id);
-  baselineId.value =
-    plan.baselineId && selectedIds.value.includes(plan.baselineId)
-      ? plan.baselineId
-      : null;
+  const records = plan.definition.selectedRecords;
+  const valid = records.filter(record => allProducts.value.some(product => product.id === record.id && product.brand === record.brand && product.model === record.model));
+  if (valid.length !== records.length) {
+    planRestoreFeedback.value = '方案中的部分测试记录已发生变化，未自动切换当前选择。'; return;
+  }
+  selectedIds.value = valid.map(record => record.id);
+  baselineId.value = plan.definition.baselineId;
+  const rowKeys = new Set(cards.value.flatMap(card => card.rows.map(row => row.key)));
+  hiddenByRow.value = Object.fromEntries(Object.entries(plan.definition.hiddenByRow).filter(([key]) => rowKeys.has(key)).map(([key,ids]) => [key,ids.filter(id => selectedIds.value.includes(id))]));
+  planRestoreFeedback.value = `已恢复“${plan.name}”的测试对象、基准和图例显示状态。`;
   remember();
 }
 function remember() {
@@ -295,6 +263,8 @@ async function loadCategory() {
     key = category.value;
   loading.value = true;
   error.value = '';
+  datasetVersion.value = '';
+  planRestoreFeedback.value = '';
   allProducts.value = [];
   configs.value = [];
   headerRows.value = [];
@@ -326,6 +296,7 @@ async function loadCategory() {
     model: String(p.model || ''),
   }));
   headerRows.value = data.headerRows || [];
+  datasetVersion.value = data.datasetVersion || '';
   colorMap.value = Object.fromEntries(
     allProducts.value.map((p, i) => [
       p.id,
@@ -386,7 +357,6 @@ function exportCsv() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 watch(category, loadCategory, { immediate: true });
-onMounted(loadSavedPlans);
 </script>
 
 <template>
@@ -444,40 +414,6 @@ onMounted(loadSavedPlans);
             </option>
           </select>
         </label>
-        <div class="plan-controls">
-          <input
-            v-model="analysisName"
-            type="text"
-            maxlength="40"
-            placeholder="分析方案名称"
-            aria-label="分析方案名称"
-          />
-          <button
-            class="lab-button"
-            :disabled="!selectedProducts.length"
-            @click="saveAnalysisPlan"
-          >
-            保存方案
-          </button>
-          <select
-            aria-label="恢复分析方案"
-            @change="
-              restoreAnalysisPlan(($event.target as HTMLSelectElement).value);
-              ($event.target as HTMLSelectElement).value = '';
-            "
-          >
-            <option value="">恢复方案</option>
-            <option
-              v-for="plan in savedPlans.filter(
-                (item) => item.category === category,
-              )"
-              :key="plan.id"
-              :value="plan.id"
-            >
-              {{ plan.name }}
-            </option>
-          </select>
-        </div>
         <button
           class="lab-button"
           :disabled="!selectedProducts.length || !plottedConfigs.length"
@@ -486,6 +422,8 @@ onMounted(loadSavedPlans);
           导出当前对象 CSV
         </button>
       </div>
+      <AnalysisPlanManager :category="category" :selected-ids="selectedIds" :baseline-id="baselineId" :hidden-by-row="hiddenByRow" :dataset-version="datasetVersion" @restore="restoreAnalysisPlan" />
+      <p v-if="planRestoreFeedback" class="lab-help" role="status">{{ planRestoreFeedback }}</p>
       <div v-if="error" class="lab-status error" role="alert">
         <span>{{ error }}</span
         ><button @click="loadCategory">重试</button>
@@ -648,6 +586,7 @@ onMounted(loadSavedPlans);
         </section>
       </template>
     </div>
+    <BackToTop />
   </div>
 </template>
 

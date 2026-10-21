@@ -122,6 +122,7 @@ const handleLogin = async () => {
       return;
     }
     localStorage.setItem('tc_token', result.data.token);
+    localStorage.setItem('tc_account_id', result.data.accountId);
     localStorage.setItem('tc_username', result.data.username);
     localStorage.setItem('tc_role', result.data.role);
     let target =

@@ -1,0 +1,17 @@
+{
+  "passed": 12,
+  "checks": [
+    "identity uses unique login account, not shared display name",
+    "unauthenticated plan access denied",
+    "same-name plans are separate per account and admins publish shared scope",
+    "each analyst sees own private plans and shared plans; admins cannot list others private plans",
+    "direct private-plan URL and delete attempts denied to other users including admins",
+    "shared plans are readable by everyone and cannot be deleted by analysts",
+    "client-supplied owner, role and sharing scope cannot elevate privileges",
+    "plan permission exception does not open import endpoints",
+    "updating own named plan cannot overwrite same-name private/shared plans of other accounts",
+    "invalid records, baseline, hidden IDs and stale dataset versions are rejected",
+    "SQL persistence survives repository reinitialization with complete view configuration",
+    "administrator can remove shared plans and owners can remove own private plans"
+  ]
+}

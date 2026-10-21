@@ -1,0 +1,14 @@
+[
+  {
+    "username": "analyst-a",
+    "password": "REPLACE_WITH_A_UNIQUE_PASSWORD",
+    "role": "user",
+    "displayName": "分析人员 A"
+  },
+  {
+    "username": "analyst-b",
+    "password": "REPLACE_WITH_ANOTHER_UNIQUE_PASSWORD",
+    "role": "user",
+    "displayName": "分析人员 B"
+  }
+]

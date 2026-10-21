@@ -62,11 +62,17 @@ export function readSelection(
   }
 }
 
+function selectionStorageKey(category: string): string | null {
+  const account = localStorage.getItem('tc_account_id');
+  return account
+    ? `tc-lab-selection:${encodeURIComponent(account)}:${category}`
+    : null;
+}
+
 export function loadSelection(category: string): DeviceIdentity[] {
   try {
-    return readSelection(
-      sessionStorage.getItem(`tc-lab-selection:${category}`),
-    );
+    const key = selectionStorageKey(category);
+    return key ? readSelection(sessionStorage.getItem(key)) : [];
   } catch {
     return [];
   }
@@ -77,8 +83,10 @@ export function saveSelection(
   samples: DeviceIdentity[],
 ): void {
   try {
+    const key = selectionStorageKey(category);
+    if (!key) return;
     sessionStorage.setItem(
-      `tc-lab-selection:${category}`,
+      key,
       JSON.stringify(
         samples.map(({ id, brand, model }) => ({ id, brand, model })),
       ),

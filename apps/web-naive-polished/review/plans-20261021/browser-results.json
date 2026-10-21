@@ -1,0 +1,16 @@
+{
+  "passed": 10,
+  "checks": [
+    "private plan saves and restores objects, baseline and per-row visibility",
+    "saved private plans survive a page reload",
+    "two separate analysts see only their own private plans",
+    "administrator template appears across browsers and is read-only to analysts",
+    "tampering with local role cannot change server-controlled publishing scope",
+    "mobile back-to-top works with mouse/keyboard and reduced motion without overflow",
+    "same account can access its plans from a separate browser context",
+    "switching account in the same browser does not retain private plan data",
+    "plan owner can remove their own private plan",
+    "plans from replaced datasets cannot restore reused row IDs"
+  ],
+  "pageErrors": []
+}

@@ -99,6 +99,7 @@ const mobileOpen = ref(false);
 const handleLogout = async () => {
   await dbApi.logout();
   localStorage.removeItem('tc_token');
+  localStorage.removeItem('tc_account_id');
   localStorage.removeItem('tc_username');
   localStorage.removeItem('tc_role');
   router.push('/auth/login');
