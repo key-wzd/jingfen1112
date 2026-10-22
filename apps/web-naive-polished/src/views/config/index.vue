@@ -48,7 +48,9 @@
           <div>
             <div class="panel-kicker">IMPORT WORKFLOW</div>
             <h3>导入一份完整数据</h3>
-            <p>校验工作表和数值，核对预览清单后确认导入。</p>
+            <p>
+              校验工作表和数值，支持用 / 表示未测量或不适用，核对预览清单后确认导入。
+            </p>
           </div>
           <button class="btn btn-outline" @click="downloadTemplate">
             下载模板 <span>↓</span>

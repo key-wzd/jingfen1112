@@ -32,6 +32,18 @@ const preview=await previewResponse.json();
 assert.equal(previewResponse.status,200,JSON.stringify(preview));
 assert(preview.data.sheets.length>0);
 report.push('actual workbook preview succeeds');
+const placeholderWorkbook=xlsx.utils.book_new();
+xlsx.utils.book_append_sheet(placeholderWorkbook,xlsx.utils.aoa_to_sheet([
+ ['品牌','A','B','C','D','E','F','G','H','I','J'],
+ ['型号','slash','spaced-slash','wide-slash','zero','blank','dash','em-dash','na','n-a','number'],
+ ['使用功耗','/',' / ','／',0,'','-','—','NA','N/A','1,250.5'],
+]),'旗舰手机功耗数据');
+const placeholderBuffer=xlsx.write(placeholderWorkbook,{bookType:'xlsx',type:'buffer'});
+const placeholders=await fetch(base+'/api/import-preview',{method:'POST',headers:{Authorization:'Bearer '+admin},body:form(placeholderBuffer)});
+const placeholderPreview=await placeholders.json();
+assert.equal(placeholders.status,200,JSON.stringify(placeholderPreview));
+assert.equal(placeholderPreview.data.sheets[0].rows,10);
+report.push('slash placeholders, existing missing markers and real numbers pass preview');
 const changedWorkbook=xlsx.read(template);
 const changedSheet=changedWorkbook.Sheets[changedWorkbook.SheetNames[0]];
 const target=Object.keys(changedSheet).find(key=>key[0]!=='!' && typeof changedSheet[key].v==='number');

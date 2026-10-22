@@ -1155,14 +1155,14 @@ function prepareWorkbook(filename) {
         const value = row[field.cn_name];
         if (
           value == null ||
-          ['', '-', '—', 'NA', 'N/A'].includes(
+          ['', '/', '／', '-', '—', 'NA', 'N/A'].includes(
             String(value).trim().toUpperCase(),
           )
         )
           continue;
         if (toMeasurement(value) === null)
           throw new Error(
-            `工作表「${name}」第 ${i + 2} 列「${field.cn_name}」不是有效数值。`,
+            `工作表「${name}」第 ${i + 2} 列「${field.cn_name}」不是有效数值；未测量或不适用时可填写 / 或留空。`,
           );
       }
     }

@@ -16,6 +16,9 @@ test('zero is preserved and distinct from missing measurements', () => {
     undefined,
     '',
     ' ',
+    '/',
+    ' / ',
+    '／',
     '—',
     '-',
     'N/A',
@@ -31,6 +34,7 @@ test('zero is preserved and distinct from missing measurements', () => {
   }
   assert.equal(displayValue(0), '0');
   assert.equal(displayValue(null), '—');
+  assert.equal(displayValue(toMeasurement('/')), '—');
 });
 test('numeric readings accept only complete numeric strings', () => {
   assert.equal(toMeasurement(' 1,250.5 '), 1250.5);
