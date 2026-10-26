@@ -1,0 +1,17 @@
+{
+  "passed": 12,
+  "checks": [
+    "unauthenticated API blocked",
+    "forged browser token blocked",
+    "analyst cannot modify/import data",
+    "assistant ranks comprehensive power and filters by a requested scenario",
+    "actual workbook preview succeeds",
+    "slash placeholders, existing missing markers and real numbers pass preview",
+    "changed file invalidates preview",
+    "invalid measurement rejected before mutation",
+    "rejected imports leave active data unchanged",
+    "staged import switches all validated metadata and preserves record counts",
+    "restore manifest produced",
+    "logout revokes server session"
+  ]
+}
