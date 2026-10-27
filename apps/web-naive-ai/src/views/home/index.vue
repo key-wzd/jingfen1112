@@ -109,7 +109,8 @@
           @click="goToCompare(cat.key)"
         >
           <div class="category-card-top">
-            <span class="category-icon"><DeviceIcon :category="cat.key" /></span
+            <span class="category-icon"
+              ><DeviceIcon :category="cat.key" :category-name="cat.name" /></span
             ><span class="card-arrow">↗</span>
           </div>
           <div class="category-index">

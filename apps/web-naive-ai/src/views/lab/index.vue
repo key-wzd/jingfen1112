@@ -4,8 +4,8 @@
       <div class="lab-hero">
         <div>
           <div class="eyebrow"><span class="eyebrow-dot"></span>TECHCOMPARE · LAB INTELLIGENCE</div>
-          <h1>实验工作台<span>让每个结论都有证据。</span></h1>
-          <p>从数据质量、异常记录到分析方案，集中查看当前测试数据的可信度与下一步动作。</p>
+          <h1>AI智能分析<span>让每个功耗结论都有证据。</span></h1>
+          <p>用 AI 解释综合功耗、场景排名、数据质量和异常记录，快速回答谁更省电、哪里需要复核。</p>
         </div>
         <button class="refresh-button" :disabled="loading" @click="loadSummary">
           <span>{{ loading ? '读取中…' : '刷新工作台' }}</span><b>↻</b>
@@ -13,11 +13,11 @@
       </div>
 
       <div v-if="error" class="state-card error" role="alert">
-        <strong>工作台暂时无法读取</strong><span>{{ error }}</span><button @click="loadSummary">重试</button>
+        <strong>AI分析暂时无法读取</strong><span>{{ error }}</span><button @click="loadSummary">重试</button>
       </div>
 
       <template v-else-if="summary">
-        <section class="metric-grid" aria-label="实验数据概览">
+        <section class="metric-grid" aria-label="AI分析数据概览">
           <article class="metric-card metric-primary"><span>数据质量</span><strong>{{ summary.totals.qualityScore }}<small>/100</small></strong><p>{{ qualityLabel }}</p></article>
           <article class="metric-card"><span>功耗记录</span><strong>{{ summary.totals.records.toLocaleString() }}</strong><p>{{ summary.totals.categories }} 个测试品类</p></article>
           <article class="metric-card metric-warning"><span>待复核异常</span><strong>{{ summary.totals.anomalies }}</strong><p>基于当前场景的统计规则</p></article>

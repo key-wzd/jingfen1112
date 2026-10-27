@@ -29,7 +29,7 @@ const coreRoutes: RouteRecordRaw[] = [
         name: 'Lab',
         path: 'lab',
         component: () => import('#/views/lab/index.vue'),
-        meta: { title: '实验工作台' },
+        meta: { title: 'AI智能分析' },
       },
       {
         name: 'Compare',

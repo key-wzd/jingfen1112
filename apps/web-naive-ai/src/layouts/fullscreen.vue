@@ -44,7 +44,7 @@
             :class="{ active: route.path === '/lab' }"
             @click="mobileOpen = false"
           >
-            <span class="nav-index">02</span>实验工作台
+            <span class="nav-index">02</span>AI智能分析
           </router-link>
           <router-link
             to="/compare/phones"

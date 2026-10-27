@@ -31,6 +31,27 @@ const GLM_MODEL = process.env.GLM_MODEL || 'glm-5.3-flash';
 const GLM_BASE_URL = (process.env.GLM_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4').replace(/\/$/, '');
 const GLM_TIMEOUT_MS = Number(process.env.GLM_TIMEOUT_MS || 30000);
 
+function repairUploadedFilename(value) {
+  const original = String(value || '').normalize('NFC').trim();
+  if (!original) return '未命名导入文件.xlsx';
+  const hasMojibake = /[ÃÂæåäçèéöøð]|[\u0080-\u009f]/.test(original);
+  if (!hasMojibake) return original;
+  try {
+    const repaired = Buffer.from(original, 'latin1').toString('utf8').normalize('NFC');
+    if (
+      repaired &&
+      !repaired.includes('\uFFFD') &&
+      !/[\u0080-\u009f]/.test(repaired) &&
+      /[\u4e00-\u9fff]/.test(repaired)
+    ) {
+      return repaired;
+    }
+  } catch {
+    /* Keep the original filename when a client sends an unusual encoding. */
+  }
+  return original;
+}
+
 app.use(cors({ origin: process.env.TC_WEB_ORIGIN || 'http://127.0.0.1:5890' }));
 app.use(express.json({ limit: '1mb' }));
 installAuth(app);
@@ -163,6 +184,10 @@ function categoryNameToKey(name) {
     鼠标: 'mice',
     键盘: 'keyboards',
     遥控器: 'remote_controls',
+    路由器: 'routers',
+    无线路由器: 'routers',
+    车钥匙: 'car_keys',
+    汽车钥匙: 'car_keys',
   };
   if (map[name]) return map[name];
   return (
@@ -997,6 +1022,7 @@ async function buildLabSummary() {
     );
     datasets = rows.map((row) => ({
       ...row,
+      file_name: repairUploadedFilename(row.file_name),
       categories: (() => {
         try { return JSON.parse(row.categories); } catch { return []; }
       })(),
@@ -1208,8 +1234,8 @@ app.get('/api/lab/summary', async (_req, res) => {
   try {
     res.json({ success: true, data: await buildLabSummary() });
   } catch (error) {
-    console.error('生成实验工作台摘要失败:', error);
-    res.status(500).json({ success: false, message: '实验工作台数据暂时不可用，请重试。' });
+    console.error('生成 AI 分析摘要失败:', error);
+    res.status(500).json({ success: false, message: 'AI 分析数据暂时不可用，请重试。' });
   }
 });
 
@@ -1753,7 +1779,7 @@ app.post('/api/import-all', upload.single('file'), async (req, res) => {
          VALUES (?, ?, ?, ?, ?)`,
         [
           batch,
-          req.file.originalname || '未命名导入文件',
+          repairUploadedFilename(req.file.originalname),
           preview.hash,
           JSON.stringify(categoryKeys),
           totalSuccess,

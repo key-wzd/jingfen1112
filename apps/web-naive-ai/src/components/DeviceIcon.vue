@@ -1,8 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-const props = defineProps<{ category: string }>();
+const props = defineProps<{ category: string; categoryName?: string }>();
 const kind = computed(() => {
-  if (['phones', 'mid_low_phones'].includes(props.category)) return 'phone';
+  const key = props.category.toLowerCase();
+  const name = props.categoryName || '';
+  if (['phones', 'flagship_phones'].includes(key) || name.includes('旗舰手机')) {
+    return 'flagship_phone';
+  }
+  if (
+    ['mid_low_phones', 'mid-range-phones', 'mid_range_phones'].includes(key) ||
+    name.includes('中低端手机')
+  ) {
+    return 'mid_phone';
+  }
+  if (
+    ['routers', 'router', 'wifi_routers', 'wifi_router'].includes(key) ||
+    name.includes('路由器')
+  ) {
+    return 'router';
+  }
+  if (
+    ['car_keys', 'car_key', 'vehicle_keys', 'vehicle_key'].includes(key) ||
+    name.includes('车钥匙')
+  ) {
+    return 'car_key';
+  }
   return props.category;
 });
 </script>
@@ -19,7 +41,7 @@ const kind = computed(() => {
     aria-hidden="true"
     focusable="false"
   >
-    <g v-if="kind === 'phone'">
+    <g v-if="kind === 'flagship_phone'">
       <rect
         x="17"
         y="5"
@@ -32,6 +54,54 @@ const kind = computed(() => {
       <path d="M25 11h14M27 52h10M17 46h30" />
       <rect x="22" y="17" width="20" height="23" rx="2" stroke-width="1.8" />
       <path d="m26 35 5-6 4 3 5-8" stroke-width="1.8" />
+      <circle cx="24" cy="10" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="28" cy="10" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="32" cy="10" r="1.1" fill="currentColor" stroke="none" />
+    </g>
+    <g v-else-if="kind === 'mid_phone'">
+      <rect
+        x="15"
+        y="7"
+        width="34"
+        height="50"
+        rx="5"
+        fill="currentColor"
+        fill-opacity=".07"
+      />
+      <path d="M25 12h14M28 51h8" />
+      <rect x="19" y="17" width="26" height="27" rx="3" stroke-width="1.8" />
+      <path d="M23 39h18M23 35l5-6 4 4 5-7" stroke-width="1.8" />
+      <circle cx="42" cy="12" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="37" cy="12" r="1.8" fill="currentColor" stroke="none" />
+    </g>
+    <g v-else-if="kind === 'router'">
+      <path d="M19 19 13 7M45 19l6-12" />
+      <circle cx="13" cy="7" r="2" fill="currentColor" />
+      <circle cx="51" cy="7" r="2" fill="currentColor" />
+      <rect
+        x="8"
+        y="19"
+        width="48"
+        height="29"
+        rx="8"
+        fill="currentColor"
+        fill-opacity=".07"
+      />
+      <path d="M18 35c3-5 7-7 14-7s11 2 14 7M23 39c2-3 5-4 9-4s7 1 9 4" />
+      <circle cx="19" cy="43" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="26" cy="43" r="1.8" fill="currentColor" stroke="none" />
+      <circle cx="33" cy="43" r="1.8" fill="currentColor" stroke="none" />
+    </g>
+    <g v-else-if="kind === 'car_key'">
+      <path
+        d="M32 8c-8 0-14 6-14 14 0 6 3 11 8 13v18c0 2 2 3 4 3h4c2 0 4-1 4-3V35c5-2 8-7 8-13 0-8-6-14-14-14Z"
+        fill="currentColor"
+        fill-opacity=".07"
+      />
+      <circle cx="32" cy="20" r="5" />
+      <circle cx="32" cy="20" r="1.8" fill="currentColor" stroke="none" />
+      <path d="M26 39h12M26 46h12M27 53h4m6 0h1" />
+      <path d="M18 31 9 40m0 0 4 4m-4-4 4-4" />
     </g>
     <g v-else-if="kind === 'mice'">
       <path

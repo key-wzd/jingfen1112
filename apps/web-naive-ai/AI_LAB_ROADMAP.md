@@ -10,9 +10,9 @@
 - 数据库：`techcompare_internal_ai`
 - 源项目：`apps/web-naive-polished`
 
-### 实验工作台
+### AI智能分析
 
-新增 `/lab` 页面，提供：
+`/lab` 页面现在以“AI智能分析”呈现，提供：
 
 - 当前数据质量分数
 - 品类记录数和缺测率
